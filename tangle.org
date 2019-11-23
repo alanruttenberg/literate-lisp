@@ -108,6 +108,7 @@ There is a debug variable to switch on/off the log messages.
 
 And let's define the org code block identifier.
 #+BEGIN_SRC lisp
+(defvar org-lisp-begin-src-id "#+begin_src lisp")
 #+END_SRC
 
 ** new defined header argument load
@@ -157,7 +158,6 @@ Additionally, we will ignore space characters in the beginning of line,let's fin
 
 the reader syntax is simple, ignore all lines until meet a ~#+begin_src lisp~ and header argument ~load~ is true.
 #+BEGIN_SRC lisp
-(defvar org-lisp-begin-src-id "#+begin_src lisp")
 (defun sharp-space (stream a b)
   (declare (ignore a b))
   (loop for line = (read-line stream nil nil)
