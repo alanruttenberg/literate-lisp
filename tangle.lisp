@@ -121,7 +121,7 @@
 ;;; Please read file `~a.~a' to find out the usage and implementation detail of this source file.~%~%"
                 (pathname-name org-file) (pathname-type org-file)
                 (pathname-name org-file) (pathname-type org-file))
-    (each-source-block-as-string
+    (each-non-code-block-source-form-as-string
      org-file
      (lambda(block)
        (if (search "defmacro defun-literate" block)
@@ -176,21 +176,21 @@
 	   unless (cl-ppcre::scan "^\\s*\\((@[+]{0,1}=)\\s+" form)
 	     do (funcall fn form)))))
 
-(defun org-file-gather-code-blocks (org-file &key)
+(defun org-file-gather-code-blocks (org-file &key read)
   (let ((code-blocks (make-hash-table :test 'equalp)))
     (each-source-form-as-string
      org-file
      (lambda(block)
        ;; (@= , @+=
        (cl-ppcre::register-groups-bind (directive name body)
-	   ("(?s)^\\s*\\((:@[+]{0,1}=)\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
+	   ("(?s)^\\s*\\((:?@[+]{0,1}=)\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
 	 (if (equal directive "@+=")
 	     (progn
 	       (assert (gethash name code-blocks) () "@+= ~a but that block hasn't been seen before" name)
-	       (push body (gethash name code-blocks)))
+	       (push (if read (read-from-string body) body) (gethash name code-blocks)))
 	     (progn
 	       (assert (not (gethash name code-blocks)) () "@= ~a found but there's already a code block by that name" name)
-	       (setf (gethash (string name) code-blocks) (list body)))))))
+	       (setf (gethash (string name) code-blocks) (list (if read (read-from-string body) body))))))))
     code-blocks))
 
 (defun replace-all (string regex function &rest which)
@@ -227,14 +227,26 @@
   `(let ((*readtable* *org-readtable*))
      ,@body))
 
-(defclass asdf::org (asdf:cl-source-file)
-  ((asdf::type :initform "org")))
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defclass asdf::org (asdf:cl-source-file)
+    ((asdf::type :initform "org")))
   (export '(asdf::org) :asdf))
 
 (defmethod asdf:perform :around (o (c asdf:org))
   (literate-lisp:with-literate-syntax
     (call-next-method)))
+
+(defmacro letf-without-package-locks (bindings &body body)
+  (if (null bindings)
+      `(progn ,@body)
+      (let ((save (gensym)))
+	`(let ((,save ,(caar bindings)))
+	   (letf-without-package-locks ,(cdr bindings)
+	     (unwind-protect (progn (#+SBCL sb-ext::without-package-locks #-SBCL progn
+				     (setf ,(caar bindings) ,(second (car bindings))))
+				    ,@body )
+	       (#+SBCL sb-ext::without-package-locks #-SBCL progn
+		(setf ,(caar bindings) ,save))))))))
 
 #+lispworks
 (lw:defadvice (cl:load literate-load :around) (&rest args)
@@ -243,19 +255,55 @@
 
 #+(or abcl sbcl)
 (eval-when (:load-toplevel :execute)
-  (defvar *save-cl-load* #'cl:load)
-  (defun cl:load (&rest args)
-    (literate-lisp:with-literate-syntax
-      (let ((named-code-blocks (org-file-gather-code-blocks (car args))))
-	(#+SBCL sb-ext::without-package-locks #-SBCL progn
-	(macrolet ((defun (&rest args &environment env)
-		       (funcall (macro-function 'cl:defun)
-			`(defun ,@(lp::expand-web-form args)) env)))
-	  (apply *save-cl-load* args)))))))
+  (defvar *save-load* #'load)
+  (defvar *save-defun* (macro-function 'defun))
+  (defvar *save-compile-file* #'compile-file)
+  #+ABCL
+  (defvar *save-compile-defun* #'jvm::compile-defun)
+  ;; In ABCL it would seem it requires hooking the compiler, as defun isn't expanded as usual
+  #+ABCL
+  (defun jvm::compile-defun (&rest args)
+    (apply *save-compile-defun*
+	   (first args) (expand-web-form (second args))
+	   (cddr args)))
+
+  (defmacro shadow-defun (name args &body body &environment env)
+    ;; SBCL needs this decl - does something that makes it
+    ;; thing named-code-blocks is lexical
+    (declare (special named-code-blocks))
+    (funcall *save-defun*
+	     `(defun ,name ,(expand-web-form args)
+		,@(expand-web-form body)) env))
+
+  (#+SBCL sb-ext::without-package-locks #-SBCL progn
+   (defun load (&rest args)
+     (if (equal (pathname-type (car args)) "org")
+	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
+	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) :read t)))
+	     (declare (special named-code-blocks))
+	     (literate-lisp:with-literate-syntax
+	       (apply *save-load* args))))
+	 (apply *save-load* args))))
+
+  ;; in SBCL defun seems to be expanded during compile, so it works too
+  ;; but watch out for lexical shenanigans
+  (#+SBCL sb-ext::without-package-locks #-SBCL progn
+   (defun compile-file (&rest args)
+     (if (equal (pathname-type (car args)) "org")
+	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
+	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) :read t)))
+	     (declare (special named-code-blocks))
+	     (literate-lisp:with-literate-syntax
+	       (apply *save-compile-file* args))))
+	 (apply *save-compile-file* args))))
+)
 
 (defvar named-code-blocks nil)
 
-(defmacro :@= (name &body body) nil)
+(defmacro :@= (name &body body)
+  (declare (ignore name body))
+  nil)
+
   ;; (if (nth-value 1 (gethash name named-code-blocks))
   ;;   (warn "code block ~a has been updated" name))
   ;; (setf (gethash (string name) named-code-blocks) body)
@@ -264,7 +312,9 @@
   ;;    (dspec:def (type ,name))
   ;;    ',name))
 
-(defmacro :@+= (name &body body) nil)
+(defmacro :@+= (name &body body)
+  (declare (ignore name body))
+  nil)
   ;; (setf (gethash name named-code-blocks)
   ;; 	(append (gethash (string name) named-code-blocks)
   ;; 		body)))
