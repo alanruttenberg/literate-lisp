@@ -495,13 +495,13 @@ label:test-read-org-code-block-header-arguments
 
 define local variables 1
 #+BEGIN_SRC lisp :load test
-(@= |local variables part 1 for test1|
+(:@= |local variables part 1 for test1|
     (x 1))
 #+END_SRC
 
 a code block contains other code block name.
 #+BEGIN_SRC lisp :load test
-(@= |local variables for test1|
+(:@= |local variables for test1|
     (:@@ |local variables part 1 for test1|)
     (y 2))
 #+END_SRC
