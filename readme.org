@@ -3,8 +3,12 @@
 #+PROPERTY: literate-lang lisp
 #+PROPERTY: literate-load yes
 
-[[http://quickdocs.org/literate-lisp/][file:http://quickdocs.org/badge/literate-lisp.svg]]
-[[https://github.com/jingtaozf/literate-lisp/actions][file:https://github.com/jingtaozf/literate-lisp/workflows/Continous%20Integration/badge.svg]]
+* Important Note
+This is a fork of the excellent work by @jingtaozf. It is currently a WIP - for a stable version see
+https://github.com/jingtaozf/literate-lisp .  Because work is in progress, this documentation will not be completely
+accurate until I've updated it. In addition tangle.org, ostensibly from which tangle.lisp is generated, is 
+out of date. tangle.lisp is the working source. I expect to update the org files in the near future.
+
 
 * Table of Contents                                            :TOC:noexport:
 - [[#introduction][Introduction]]
