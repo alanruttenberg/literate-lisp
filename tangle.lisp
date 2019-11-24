@@ -183,7 +183,7 @@
      (lambda(block)
        ;; (@= , @+=
        (cl-ppcre::register-groups-bind (directive name body)
-	   ("(?s)^\\s*\\((@[+]{0,1}=)\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
+	   ("(?s)^\\s*\\((:@[+]{0,1}=)\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
 	 (if (equal directive "@+=")
 	     (progn
 	       (assert (gethash name code-blocks) () "@+= ~a but that block hasn't been seen before" name)
@@ -213,7 +213,7 @@
 	(declare (ignore whole))
 	(assert (gethash name code-blocks) () "Code block '~a' called for, but not defined" name)
 	(if (member name *trace-substitution* :test 'equalp)
-	    (error "Circularity in code blocks: |~a| uses ~{|~a|~^ uses~}" name *trace-substitution*)
+	    (error "Circularity in code blocks: |~a| uses ~{|~a|~^ uses~}" name (reverse *trace-substitution*))
 	    (let ((*trace-substitution* (cons name *trace-substitution*)))
 	      (let ((sub (apply 'concatenate 'string
 				(mapcar (lambda(e) (maybe-substitute-code-block e code-blocks))
@@ -241,35 +241,40 @@
   (literate-lisp:with-literate-syntax
       (apply #'lw:call-next-advice args)))
 
-#-lispworks
+#+(or abcl sbcl)
 (eval-when (:load-toplevel :execute)
   (defvar *save-cl-load* #'cl:load)
   (defun cl:load (&rest args)
-      (literate-lisp:with-literate-syntax
-	  (apply *save-cl-load* args))))
+    (literate-lisp:with-literate-syntax
+      (let ((named-code-blocks (org-file-gather-code-blocks (car args))))
+	(#+SBCL sb-ext::without-package-locks #-SBCL progn
+	(macrolet ((defun (&rest args &environment env)
+		       (funcall (macro-function 'cl:defun)
+			`(defun ,@(lp::expand-web-form args)) env)))
+	  (apply *save-cl-load* args)))))))
 
-(defvar named-code-blocks (make-hash-table :test #'equalp))
+(defvar named-code-blocks nil)
 
-(defmacro @= (name &body body)
-  (if (nth-value 1 (gethash name named-code-blocks))
-    (warn "code block ~a has been updated" name))
-  (setf (gethash name named-code-blocks) body)
-  `(progn
-     #+lispworks
-     (dspec:def (type ,name))
-     ',name))
+(defmacro :@= (name &body body) nil)
+  ;; (if (nth-value 1 (gethash name named-code-blocks))
+  ;;   (warn "code block ~a has been updated" name))
+  ;; (setf (gethash (string name) named-code-blocks) body)
+  ;; `(progn
+  ;;    #+lispworks
+  ;;    (dspec:def (type ,name))
+  ;;    ',name))
 
-(defmacro @+= (name &body body)
-  (setf (gethash name named-code-blocks)
-          (append (gethash name named-code-blocks)
-                  body)))
+(defmacro :@+= (name &body body) nil)
+  ;; (setf (gethash name named-code-blocks)
+  ;; 	(append (gethash (string name) named-code-blocks)
+  ;; 		body)))
 
 (defmacro with-code-block ((name codes) &body body)
   (let ((present-p (gensym "PRESENT-P"))
         (code-block-name (gensym "NAME")))
     `(let ((,code-block-name ,name))
        (multiple-value-bind (,codes ,present-p)
-           (gethash ,code-block-name named-code-blocks)
+           (gethash (string ,code-block-name) named-code-blocks)
          (unless ,present-p
            (error "Can't find code block:~a" ,code-block-name))
          ,@body))))

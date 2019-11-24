@@ -25,7 +25,7 @@
   :serial t
   :description "a literate programming tool to write common lisp codes in org file."
   :components ((:module basics :pathname "./"
-                        :components ((:file "tangle2"))
+                        :components ((:file "tangle"))
                         :serial t)
                )
   :depends-on (cl-ppcre))
