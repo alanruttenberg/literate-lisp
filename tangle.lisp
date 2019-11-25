@@ -7,7 +7,7 @@
 (defpackage :literate-lisp
   (:use :cl)
   (:nicknames :lp)
-  (:export :tangle-org-file :with-literate-syntax :@= :@+= :with-web-syntax :defun-literate)
+  (:export :tangle-org-file :with-literate-syntax :@= :@+= )
   (:documentation "a literate programming tool to write common lisp codes in org file."))
 (pushnew :literate-lisp *features*)
 (in-package :literate-lisp)
@@ -207,7 +207,13 @@
 	   unless (cl-ppcre::scan "^\\s*\\((@[+]{0,1}=)\\s+" form)
 	     do (funcall fn form)))))
 
-(defun org-file-gather-code-blocks (org-file &key read)
+(defun read-forms-from-string (string)
+  (with-input-from-string (s string)
+    (loop for form = (read s nil :eof)
+	  until (eq form :eof)
+	  collect form)))
+
+(defun org-file-gather-code-blocks (org-file)
   (let ((code-blocks (make-hash-table :test 'equalp)))
     (each-source-form-as-string
      org-file
@@ -218,10 +224,10 @@
 	 (if (equal directive "@+=")
 	     (progn
 	       (assert (gethash name code-blocks) () "@+= ~a but that block hasn't been seen before" name)
-	       (push (if read (read-from-string body) body) (gethash name code-blocks)))
+	       (push body (gethash name code-blocks)))
 	     (progn
 	       (assert (not (gethash name code-blocks)) () "@= ~a found but there's already a code block by that name" name)
-	       (setf (gethash (string name) code-blocks) (list (if read (read-from-string body) body))))))))
+	       (setf (gethash (string name) code-blocks) (list body)))))))
     code-blocks))
 
 (defun replace-all (string regex function &rest which)
@@ -305,9 +311,13 @@
   ;; In ABCL it would seem it requires hooking the compiler, as defun isn't expanded as usual
   #+ABCL
   (defun jvm::compile-defun (&rest args)
-    (apply *save-compile-defun*
-	   (first args) (expand-web-form (second args))
-	   (cddr args)))
+    (if (or (and *load-truename* (equal (pathname-type *load-truename*) "ORG"))
+	    (and *compile-file-pathname* (equal (pathname-type  *compile-file-pathname*) "ORG")))
+	(apply *save-compile-defun*
+	       (first args) (expand-web-form (second args))
+	       (cddr args))
+	(apply *save-compile-defun* args)
+	))
 
   (defmacro shadow-defun (name args &body body &environment env)
     ;; SBCL needs this decl - does something that makes it
@@ -321,7 +331,7 @@
    (defun load (&rest args)
      (if (equal (pathname-type (car args)) "org")
 	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
-	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) :read t)))
+	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
 	     (declare (special named-code-blocks))
 	     (literate-lisp:with-literate-syntax
 	       (apply *save-load* args))))
@@ -333,7 +343,7 @@
    (defun compile-file (&rest args)
      (if (equal (pathname-type (car args)) "org")
 	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
-	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) :read t)))
+	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
 	     (declare (special named-code-blocks))
 	     (literate-lisp:with-literate-syntax
 	       (apply *save-compile-file* args))))
@@ -365,12 +375,13 @@
   (let ((present-p (gensym "PRESENT-P"))
         (code-block-name (gensym "NAME")))
     `(let ((,code-block-name ,name))
-       (multiple-value-bind (,codes ,present-p)
-           (gethash (string ,code-block-name) named-code-blocks)
+       (let* ((,present-p (gethash (string ,code-block-name) named-code-blocks))
+	      (,codes (mapcan 'read-forms-from-string ,present-p)))
          (unless ,present-p
            (error "Can't find code block:~a" ,code-block-name))
          ,@body))))
 
+;; FIXME: Has trouble with dotted lists
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun expand-web-form (form)
     (if (atom form)
@@ -400,10 +411,3 @@
                           (setf form copied-codes)))))
                    (t (setf (car left-form) (expand-web-form (car left-form)))))
             finally (return form)))))
-
-(defmacro with-web-syntax (&rest form)
-  `(progn ,@(expand-web-form form)))
-
-(defmacro defun-literate (name arguments &body body)
-  `(defun ,name ,(expand-web-form arguments)
-    ,@(expand-web-form body)))

@@ -1,0 +1,66 @@
+# -*- Mode: POLY-ORG;  -*- ---
+#+PROPERTY: literate-lang lisp
+#+PROPERTY: literate-load yes
+* Test cases
+:PROPERTIES:
+:literate-load: test
+:END:
+** Preparation
+Now it's time to validate some functions.
+The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used to test.
+
+#+BEGIN_SRC lisp :load test
+(in-package :literate-lisp)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-package :fiveam)
+    #+quicklisp (ql:quickload :fiveam)
+    #-quicklisp (asdf:load-system :fiveam)))
+(5am:def-suite literate-lisp-suite :description "The test suite of literate-lisp.")
+(5am:in-suite literate-lisp-suite)
+#+END_SRC
+** test groups
+*** test for reading org code block header-arguments
+label:test-read-org-code-block-header-arguments
+#+BEGIN_SRC lisp :load test
+(5am:test read-org-code-block-header-arguments
+  (5am:is (equal nil (read-org-code-block-header-arguments "" 0)))
+  (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no  " 0)))
+  (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no" 0))))
+#+END_SRC
+
+*** test for web syntax
+**** a simple test
+
+define local variables 1
+#+BEGIN_SRC lisp :load test
+(:@= |local variables part 1 for test1|
+    (x 1))
+#+END_SRC
+
+a code block contains other code block name.
+#+BEGIN_SRC lisp :load test
+(:@= |local variables for test1|
+    (:@@ |local variables part 1 for test1|)
+    (y 2))
+#+END_SRC
+
+define a function
+#+BEGIN_SRC lisp :load test
+(defun web-syntax-test1 ()
+  (let ((a 1)
+        (:@@ |local variables for test1|))
+    (list a x y)))
+#+END_SRC
+
+Let's test this function
+#+BEGIN_SRC lisp :load test
+(5am:test web-syntax-case1
+  (5am:is (equal '(1 1 2) (web-syntax-test1))))
+#+END_SRC
+
+** run all tests in this library
+this function is the entry point to run all tests and return true if all test cases pass.
+#+BEGIN_SRC lisp :load test
+(defun run-test ()
+  (5am:run! 'literate-lisp-suite))
+#+END_SRC
