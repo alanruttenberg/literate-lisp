@@ -284,25 +284,43 @@
   (literate-lisp:with-literate-syntax
     (call-next-method)))
 
-(defmacro letf-without-package-locks (bindings &body body)
-  (if (null bindings)
-      `(progn ,@body)
-      (let ((save (gensym)))
-	`(let ((,save ,(caar bindings)))
-	   (letf-without-package-locks ,(cdr bindings)
-	     (unwind-protect (progn (#+SBCL sb-ext::without-package-locks #-SBCL progn
-				     (setf ,(caar bindings) ,(second (car bindings))))
-				    ,@body )
-	       (#+SBCL sb-ext::without-package-locks #-SBCL progn
-		(setf ,(caar bindings) ,save))))))))
-
 #+lispworks
 (lw:defadvice (cl:load literate-load :around) (&rest args)
   (literate-lisp:with-literate-syntax
       (apply #'lw:call-next-advice args)))
 
-#+(or abcl sbcl)
-(eval-when (:load-toplevel :execute)
+#+(or abcl sbcl ccl cmu ecl allegro)
+(eval-when (:load-toplevel :execute :compile-toplevel)
+
+;; abcl-bin yes
+;; ccl-bin yes
+;; sbcl-bin yes
+;; ecl yes
+;; cmu-bin yes
+;; allegro yes
+
+  (defmacro without-cl-locked (&body body)
+  `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
+     #+SBCL sb-ext::without-package-locks
+     #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
+     #+CMU extensions::without-package-locks
+     #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
+     #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
+     ,@body))
+
+  (defmacro letf-without-cl-lockeds (bindings &body body)
+    (if (null bindings)
+      `(progn ,@body)
+      (let ((save (gensym)))
+	`(let ((,save ,(caar bindings)))
+	   (letf-without-cl-lockeds ,(cdr bindings)
+	     (unwind-protect (progn
+			       (without-cl-locked
+				   (setf ,(caar bindings) ,(second (car bindings))))
+			       ,@body)
+	       (without-cl-locked
+		   (setf ,(caar bindings) ,save))))))))
+
   (defvar *save-load* #'load)
   (defvar *save-defun* (macro-function 'defun))
   (defvar *save-compile-file* #'compile-file)
@@ -327,27 +345,27 @@
 	     `(defun ,name ,(expand-web-form args)
 		,@(expand-web-form body)) env))
 
-  (#+SBCL sb-ext::without-package-locks #-SBCL progn
-   (defun load (&rest args)
-     (if (equal (pathname-type (car args)) "org")
-	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
-	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
-	     (declare (special named-code-blocks))
-	     (literate-lisp:with-literate-syntax
-	       (apply *save-load* args))))
-	 (apply *save-load* args))))
+  (without-cl-locked
+      (defun load (&rest args)
+	(if (equal (pathname-type (car args)) "org")
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
+		(declare (special named-code-blocks))
+		(literate-lisp:with-literate-syntax
+		  (apply *save-load* args))))
+	    (apply *save-load* args))))
 
   ;; in SBCL defun seems to be expanded during compile, so it works too
   ;; but watch out for lexical shenanigans
-  (#+SBCL sb-ext::without-package-locks #-SBCL progn
-   (defun compile-file (&rest args)
-     (if (equal (pathname-type (car args)) "org")
-	 (letf-without-package-locks (((macro-function 'defun) (macro-function 'shadow-defun)))
-	   (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
-	     (declare (special named-code-blocks))
-	     (literate-lisp:with-literate-syntax
-	       (apply *save-compile-file* args))))
-	 (apply *save-compile-file* args))))
+  (without-cl-locked
+      (defun compile-file (&rest args)
+	(if (equal (pathname-type (car args)) "org")
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (org-file-gather-code-blocks (car args) )))
+		(declare (special named-code-blocks))
+		(literate-lisp:with-literate-syntax
+		  (apply *save-compile-file* args))))
+	    (apply *save-compile-file* args))))
 )
 
 (defvar named-code-blocks nil)
