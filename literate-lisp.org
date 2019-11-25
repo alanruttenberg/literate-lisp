@@ -415,7 +415,7 @@ We walk through the lisp form and replace all WEB forms to their actual code blo
       form
       (loop for previous-form = nil then left-form
             for left-form = form then (cdr left-form)
-            until (null left-form)
+            until (or (null left-form) (atom left-form))
             when (listp (car left-form))
               do (case (caar left-form)
                    (quote nil); ignore a quote list.
