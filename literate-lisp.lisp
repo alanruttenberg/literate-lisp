@@ -1163,19 +1163,26 @@
 ;; - @+=
 ;; None of the above in the initial export.
 ;; ** And for the grand finale
+;; A support function using diff quicklisp package.
+;; (ql:quickload :diff)
+;; (defun file-diff (file1 file2)
+;;   (with-output-to-string (s) 
+;;     (diff::render-diff (diff::generate-diff 'diff:context-diff file1 file2) s)))
+;; (defun files-same? (file1 file2)
+;;   (equalp (print (file-diff file1 file2))
+;; 	  (print (format nil "*** ~a~%--- ~a~%" file1 file2))))
 ;; Test that we can re-generate literate-lisp
 ;; (:@+= |tests|
 ;;   (5am:test tangle-ok?
 ;; 	    (5am:is 
 ;; 	     (let ((org-path (asdf/system::system-relative-pathname 'literate-lisp "literate-lisp.org")))
 ;; 	       (pushnew :literate-test *features*)
-;; 	       (tangle-org-file org-path  :output-file "/tmp/literate-1.lisp" :keep-test-codes t)
+;; 	       (let ((file1 (merge-pathnames "ll-1.lisp" uiop/stream:*temporary-directory*))
+;; 		     (file2 (merge-pathnames "ll-2.lisp" uiop/stream:*temporary-directory*)))
+;; 	       (tangle-org-file org-path  :output-file file1 :keep-test-codes t)
 ;; 	       (unhook)
 ;; 	       (rename-package "LITERATE-LISP" (gensym))
-;; 	       (load "/tmp/literate-1.lisp") 
-;; 	       (funcall (intern "TANGLE-ORG-FILE" 'lp)  org-path  :output-file "/tmp/literate-2.lisp" :keep-test-codes t)
-;; 	       (equal "" (with-output-to-string (s)
-;; 			   (uiop/run-program:run-program
-;; 			    "diff /tmp/literate-2.lisp /tmp/literate-1.lisp"
-;; 			    :output s)))))))
+;; 	       (load file1) 
+;; 	       (funcall (intern "TANGLE-ORG-FILE" 'lp)  org-path  :output-file file2 :keep-test-codes t)
+;; 	       (files-same? file1 file2))))))
 
