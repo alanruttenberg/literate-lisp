@@ -4,20 +4,22 @@
 ;;; for the org-mode comments and directives.
 
 
+;; * Org setup :noexport:
 ;; * Table of Contents                                               :noexport:TOC:
 ;; - [[#introduction][Introduction]]
-;; - [[#how-to-do-it][How to do it?]]
+;;   - [[#terminology][Terminology]]
+;; - [[#implementation-strategy][Implementation strategy]]
+;;   - [[#reading][Reading]]
+;;   - [[#working-with-code-chunks][Working with code chunks]]
+;;   - [[#leveraging-asdf][Leveraging ASDF]]
 ;; - [[#implementation][Implementation]]
 ;;   - [[#preparation][Preparation]]
-;;   - [[#new-defined-header-argument-load][new defined header argument load]]
-;;   - [[#function-to-handle-reader-syntax-for----space][function to handle reader syntax for "# "(# + Space)]]
-;;   - [[#an-implementation-of-original-feature-test][an implementation of original feature test.]]
-;;   - [[#function-to-handle-reader-syntax-for-][function to handle reader syntax for "#+"]]
-;;   - [[#install-the-new-reader-syntax][Install the new reader syntax.]]
-;;   - [[#tangle-an-org-file][tangle an org file]]
-;;   - [[#make-asdf-handle-org-file-correctly][make ASDF handle org file correctly]]
-;;   - [[#make-lispworks-handle-org-file-correctly][make Lispworks handle org file correctly]]
-;;   - [[#web-syntax][WEB syntax]]
+;;   - [[#reading-the-org-file][Reading the org file]]
+;;   - [[#working-with-strings-representing-code][Working with strings representing code]]
+;;   - [[#working-with-code-chunks-1][Working with code chunks]]
+;;   - [[#tangling-the-org-file][Tangling the org file]]
+;;   - [[#ensuring-that-code-chunk-references-are-expanded-when-loading-or-compiling][Ensuring that code chunk references are expanded when loading or compiling]]
+;;   - [[#asdf-support-for-org-file-as-source-code][ASDF support for org file as source code]]
 ;; - [[#release-this-file][Release this file]]
 ;; - [[#test-cases][Test cases]]
 ;;   - [[#preparation-1][Preparation]]
@@ -26,51 +28,110 @@
 ;;   - [[#run-all-tests-in-demo-project][run all tests in demo project]]
 ;; - [[#references][References]]
 ;; - [[#new-sections-from-alanr][New sections from alanr]]
-;;   - [[#terminology][Terminology]]
-;;   - [[#working-with-strings-representing-code][Working with strings representing code]]
-;;   - [[#working-with-source-blocks-and-code-chunks][Working with source blocks and code chunks]]
-;;   - [[#redefined-functions][Redefined functions]]
-;;   - [[#compiling-and-loading][Compiling and loading]]
-;;   - [[#modifying-with-code-block---with-code-chunk][Modifying with-code-block -> with-code-chunk]]
-;;   - [[#no-longer-needed][No longer needed]]
-;;   - [[#and-for-the-grand-finale][And for the grand finale]]
+;;   - [[#bootstrap-test][Bootstrap test]]
+;;   - [[#bugs][Bugs]]
 ;;   - [[#todo][TODO]]
+;;   - [[#why-we-need-to-patch-defun-and-maybe-others-and-have-the--macro][Why we need to patch defun (and maybe others) AND have the :@ macro.]]
 ;;   - [[#broken][Broken]]
 ;;   - [[#working][Working]]
 ;; * Introduction
-;; This is a Common Lisp project to show a way how to use [[http://www.literateprogramming.com/][literate programming]] in Common Lisp.
-;; It extends the Common Lisp [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]]
-;; so a Common Lisp vendor can read org files as Common Lisp source files.
-;; [[https://github.com/limist/literate-programming-examples][literate programming examples]] show the reason why use org mode,
-;; and there are also another lisp project [[https://github.com/xtaniguchimasaya/papyrus][papyrus]] to do the similar thing but it use markdown file format.
-;; By using Common Lisp package [[https://github.com/jingtaozf/literate-lisp][literate-lisp]] , Emacs [[https://orgmode.org/][org mode]] and elisp library [[https://polymode.github.io/][polymode]],
-;; literate programming can be easy in one org file containing both documentation and source codes,
-;; and this org file works well with [[https://common-lisp.net/project/slime/][SLIME]].
-;; * How to do it?
-;; In org mode, the comment line start with character ~#~ (see [[https://orgmode.org/manual/Comment-lines.html][org manual]] ),
-;; and the lisp codes exists between ~#+begin_src lisp~ and ~#+end_src~
-;; (see [[https://orgmode.org/manual/Literal-examples.html][org manual]]).
+;; This is a project to enable [[http://www.literateprogramming.com/][literate programming]] in Common Lisp, leveraging
+;; Emacs' [[https://orgmode.org/][org mode]] along with other emacs packages.  Literate programming is a
+;; style of writing code in the way you would write explanatory prose. Code
+;; can be broken down in a way that supports the narrative, even breaking
+;; functions up into separate, even out of order, chunks in the prose.  At the same time the code
+;; can be put together for the purpose of running it.  Traditional literate
+;; programming tools support taking what you've written and generating two
+;; products. One a nicely typset document suitable for publication, and the
+;; other a plain source code file that can be compiled and executed. 
+;; This project, in part, supports that workflow.
+;; We take this further by enabling the org file to act as the source
+;; file. Just as you would use [[https://common-lisp.net/project/slime/][SLIME]] to work with a lisp file in emacs, the
+;; project makes it possible to work with SLIME in an org file. Rather than
+;; having to generate a lisp source file to use with tools, the org file
+;; becomes the source file directly. The org can be loaded, compiled and
+;; included as source file in an ASDF system definition.
+;; Org mode makes it possible to edit, eval and run code from within the org
+;; mode buffer.  However babel's editing support is as generic text. For
+;; example, there is no support for indentation or navigating to other
+;; definitions. The elisp library [[https://polymode.github.io/][polymode]] enhances that by arranging that as
+;; you move into a source code block slime-mode becomes active.
+;; Org mode also makes it possible lisp code to generate content that is
+;; included in the org file. For example some lisp code might generate a figure 
+;; that is subsequently included in the document. 
+;; To summarize, this project supports several different ways of writing
+;; (code).  You can use the org files directly as your source files, or export
+;; to pure lisp source files that can be used and distributed without needing
+;; the environment installed. or source code in the file generate content that
+;; is included in the document.
+;; ** Terminology
+;; A [[https://orgmode.org/worg/org-contrib/babel/intro.html#source-code-blocks-org][*source block*]] is a section in the org file delimited by /#+begin_src/ and
+;; /#+end_src/, but not within an org [[https://orgmode.org/manual/Comment-lines.html][comment]] or [[https://orgmode.org/manual/Literal-examples.html][example]].
+;; A *lisp source block* is a common lisp source block.
+;; A *form* is a lisp sexp
+;; A *code chunk* is a lisp source block with one or more forms, typically a code fragment.
+;; Code chunks have names so they can be referenced in other code that uses them.
+;; A *code chunk reference* is a way to specify by name what code chunk should be
+;; substituted in it's place.  
+;; To *tangle* an org file is to transform it in to a lisp source code file that can be loaded by
+;; a lisp implementation unaware of org syntax or this project.
+;; * Implementation strategy
+;; ** Reading 
+;; In org mode, comment lines start with character ~#~ (see [[https://orgmode.org/manual/Comment-lines.html][org manual]] ),
+;; and lisp code is put between ~#+begin_src lisp~ and ~#+end_src~
+;; (see [[https://orgmode.org/manual/Literal-examples.html][org manual]]). Here's an example.
 ;;    ,#+BEGIN_SRC lisp :load no
 ;;    (format t "this is a test.~%")
 ;;    ,#+END_SRC
-;; So to let lisp can read an org file directly, all lines out of surrounding
-;; by ~#+begin_src lisp~ and ~#+end_src~ should mean nothing,
-;; and even codes surrounding by them should mean nothing
-;; if the [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]]  in a code block request such behavior.
-;; Here is a trick, a new [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node192.html][lisp reader]] syntax for "# "([[http://clhs.lisp.se/Body/02_dhu.htm][Sharpsign Whitespace]]) will have a meaning
-;; to make lisp reader enter into org mode syntax,
-;; then ignore all lines after that until it meet ~#+BEGIN_SRC lisp~.
-;; When ~#+begign_src lisp~ occurs, org [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]] for this code block give us
-;; a chance to switch back to normal lisp reader or not.
-;; And if it switch back to normal lisp reader, the end line ~#+END_SRC~ should mean the end of current
-;; code block,so the lisp reader syntax for "#+"([[http://clhs.lisp.se/Body/02_dhq.htm][Sharpsign Plus]])will have an additional meaning
-;; to determine if it is ~#+END_SRC~,
-;; if it is, then lisp reader will switch back to org mode syntax,
-;; if it is not, lisp reader will continue to read subsequent stream as like the original lisp reader.
-;; This workflow restricts the org file starting with a comment character and a space character("# "),
-;; but it should not be a problem but indeed a convenient way for us to specify some local variables,
-;; for example I often put them in the first line of an org file:
-;; Which make Emacs open file with utf-8 encoding and [[https://github.com/polymode/poly-org][poly-org-mode]].
+;; If we want lisp to use an org file directly, all text outside the markers
+;; ~#+begin_src lisp~ and ~#+end_src~ should be ignored. How do we accomplish that?
+;; We do this with by exploiting Common Lisp's ability to modify [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]].
+;; The trick is to add a reader macro for "# "([[http://clhs.lisp.se/Body/02_dhu.htm][Sharpsign Whitespace]]), under
+;; the assumption that the first line in org file will start with "#" space.
+;; The macro ignores all lines until it sees ~#+BEGIN_SRC lisp~. It then 
+;; can read source as usual until it gets to ~#+END_SRC~. When the reader reads 
+;; "#+"([[http://clhs.lisp.se/Body/02_dhq.htm][Sharpsign Plus]]) it invokes the existing reader macro enabling conditional reading depending on *features* 
+;; We modify that reader to not interpret ~END_SRC~ as a feature and instead to
+;; keep reading over org text until it arrives at the next ~#+BEGIN_SRC lisp~.
+;; While you can still use ~#+~ style conditional reading we also enable a second way.
+;; Org mode allows The ~#+begin_src lisp~ line to have additional information in the form of
+;; [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]]. Based on those headers we can decide whether the code should 
+;; be read otherwise be handled. The # space reader can read those headers and based on them
+;; act differently, for example by continuing to read over that code without interpreting it.
+;; Future work may offer new capabilities based on headers, for example to direct that
+;; when creating lisp source this portion should be put in a different file.
+;; While this workflow requires the org file to start with "# ", this
+;; shouldn't be a problem. First, org mode considers a line starting with "# "
+;; to be a comment, so the line need not be visible in the presentation
+;; document. Second, consider it a convenient way for us to specify some local
+;; variables, for example you can the first line of an org file be something
+;; like this,
+;; which make Emacs open the file with utf-8 encoding and in [[https://github.com/polymode/poly-org][poly-org-mode]].
+;; ** Working with code chunks
+;; We want to support breaking functions up into pieces that can be put back
+;; together appropriately. First, we introduce some syntax. Where we want 
+;; to incorporate a piece of code we use (:@ <name of chunk>). We define these
+;; chunks in forms that look like (:@+ <name of chunk>). There can be multiple
+;; chunks with the same name - the contents are concatenated.
+;; To support this we have to handle two cases, having Common Lisp load and
+;; compile the org file, and tangling the org file to create lisp source.
+;; These are handled in separate ways. Both ways are supported by doing a
+;; first pass over the file to collect the code chunks, which may defined
+;; after they are used.
+;; To tangle the file, the file is read again, substituting the code chunks
+;; for code chunk references.
+;; When having lisp load or compile the file we need to hook some Common Lisp
+;; functions so that they first collect the code chunks before doing their
+;; normal processing. For loading it is sufficient to modify defun to first
+;; walk the body and replace code chunk references with their chunk before
+;; doing it's usual work.
+;; Compilers don't always macroexpand the defun forms. For those compilers we
+;; need to modify the function that /does/ process the defuns. Of the
+;; compilers tested thus far, ABCL and Allegro need this treatment. 
+;; ABCL is implemented, but not yet Allegro.
+;; ** Leveraging ASDF
+;; ASDF allows one to define new components. We'll define one called :org and add
+;; some logic for compiling and loading.
 ;; * Implementation
 ;; ** Preparation
 ;; Firstly a new lisp package for this library is defined.
@@ -79,7 +140,7 @@
 (defpackage :literate-lisp
   (:use :cl)
   (:nicknames :lp)
-  (:export :tangle-org-file :with-literate-syntax :@= :@+= :with-web-syntax :defun-literate)
+  (:export :tangle-org-file :with-literate-syntax )
   (:documentation "a literate programming tool to write Common Lisp codes in org file."))
 (pushnew :literate-lisp *features*)
 (in-package :literate-lisp)
@@ -87,39 +148,47 @@
 ;; Define globals
 
   ;; Using |defvars|
-  (defvar imdone nil)  (defvar *save-load* #'load)
+(defvar imdone nil)(defvar *save-load* #'load)
   (defvar *save-defun* (macro-function 'defun))
   (defvar *save-compile-file* #'compile-file)
   #+ABCL
   (defvar *save-compile-defun* #'jvm::compile-defun)
-      (defvar *tangling-to-stream* nil)
+
+(defvar *tangling-to-stream* nil)
   (defvar *tangle-keep-org-text* nil)
   (defvar *tangling-verbatim* nil)
-    (defvar *trace-substitution* nil)  (defvar *error-if-adding-to-unknown-block* t)  (defvar named-code-blocks nil)
+  (defvar *trace-substitution* nil)(defvar named-code-blocks nil)
 
 ;; There is a debug variable to switch on/off the log messages.
 
 (defvar debug-literate-lisp-p nil)
 (declaim (type boolean debug-literate-lisp-p))
 
-;; And let's define the org code block identifier.
+;; And let's define the org code block delimiters. The begin is a string and the end is a keyword (since it is read by ~#+~)
 
 (defvar org-lisp-begin-src-id "#+begin_src lisp")
+(defvar org-lisp-end-src-id  :end_src)
 
-;; ** new defined header argument load
-;; There are a lot of different lisp codes occur in one org file, some for function implementation,
-;; some for demo, and some for test, so a new [[https://orgmode.org/manual/Structure-of-code-blocks.html][org code block]] [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header argument]]  ~load~ to decide to
-;; read them or not should define,and it has three meanings:
-;; - yes \\
-;;   It means that current code block should load normally,
-;;   it is the default mode when the header argument ~load~ is not provided.
-;; - no \\
-;;   It means that current code block should ignore by lisp reader.
-;; - test \\
-;;   It means that current code block should load only when feature ~literate-test~ exist.
-;;   This keyword is kept just for a compatiblity for previous releases of ~literate-lisp~
-;; - other feature keyword registered in global variable ~*features*~ \\
-;;   So you can take advantage of ~*features*~ to load your codes by various purposes.
+;; ** Reading the org file
+;; This support function skips over whitespace. 
+
+(defun start-position-after-space-characters (line)
+  (loop for c of-type character across line
+        for i of-type fixnum from 0
+        until (not (find c '(#\Tab #\Space)))
+        finally (return i)))
+
+;; *** Let a header argument determine whether to load
+;; The org file may have source code for different purposes, for example
+;; implementation, demonstration, and testing. To support this a new [[https://orgmode.org/manual/Structure-of-code-blocks.html][org code block]] [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header argument]]  ~load~ is used to indicate
+;; whether the code should be used or not. The possible values are:
+;; |yes|The current code block should load normally. This is the default mode when the header argument ~load~ is not provided.
+;; |no|The current code block should ignore by lisp reader. |
+;; |test|The current code block is test related.|
+;; |<keyword> |The block should load only when feature the keyword is present in [[http://www.lispworks.com/documentation/HyperSpec/Body/v_featur.htm][~*features*~]].|
+;; To control whether test related code should be loaded, we use the keyword ~:literate-test~.
+;; This function evaluates whether or not a code block should be loaded, based on the load header argument.
+;; When it sees :test it only returns true if ~:literate-test~ is in ~*features*~. 
 
 (defun load-p (feature)
   (case feature
@@ -128,8 +197,8 @@
     (:test (find :literate-test *features* :test #'eq))
     (t (find feature *features* :test #'eq))))
 
-;; Let's implement a function to read [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]] after ~#+BEGIN_SRC lisp~,
-;; and convert every key and value to a lisp keyword(Test in here: ref:test-read-org-code-block-header-arguments).
+;; Now code to read [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]] after ~#+BEGIN_SRC lisp~,
+;; and convert every key and value to a lisp keyword (see test in [[block header test]]).
 
 (defun read-org-code-block-header-arguments (string begin-position-of-header-arguments)
   (with-input-from-string (stream string :start begin-position-of-header-arguments)
@@ -140,101 +209,15 @@
                      while elem
                      collect elem))))
 
-;; ** function to handle reader syntax for "# "(# + Space)
-;; Now it's time to implement the new reader function for syntax "# "(# + Space).
-;; We have to check whether current line is a ~#+begin src lisp~.
-;; Additionally, we will ignore space characters in the beginning of line,let's find the position of it by a function.
-
-(defun start-position-after-space-characters (line)
-  (loop for c of-type character across line
-        for i of-type fixnum from 0
-        until (not (find c '(#\Tab #\Space)))
-        finally (return i)))
-
-;; the reader syntax is simple, ignore all lines until meet a ~#+begin_src lisp~ and header argument ~load~ is true.
-
-
-
-;; ** an implementation of original feature test.
-;; This code block reference from the [[https://github.com/sbcl/sbcl/blob/master/src/code/sharpm.lisp][sbcl source codes]] with some minor modifications.
-;; It implements how to do feature test.
-
-;;; If X is a symbol, see whether it is present in *FEATURES*. Also
-;;; handle arbitrary combinations of atoms using NOT, AND, OR.
-(defun featurep (x)
-  (typecase x
-    (cons
-     (case (car x)
-       ((:not not)
-        (cond
-          ((cddr x)
-           (error "too many subexpressions in feature expression: ~S" x))
-          ((null (cdr x))
-           (error "too few subexpressions in feature expression: ~S" x))
-          (t (not (featurep (cadr x))))))
-       ((:and and) (every #'featurep (cdr x)))
-       ((:or or) (some #'featurep (cdr x)))
-       (t
-        (error "unknown operator in feature expression: ~S." x))))
-    (symbol (not (null (member x *features* :test #'eq))))
-    (t
-      (error "invalid feature expression: ~S" x))))
-
-;; ** function to handle reader syntax for "#+"
-;; The mechanism to handle normal lisp syntax "#+" is also referenced from [[https://github.com/sbcl/sbcl/blob/master/src/code/sharpm.lisp][sbcl source codes]].
-;; Let's read the ~feature value~ after ~#+~ as a keyword
-
-(defun read-feature-as-a-keyword (stream)
-  (let ((*package* #.(find-package :keyword))
-        ;;(*reader-package* nil)
-        (*read-suppress* nil))
-    (read stream t nil t)))
-
-;; And if ~feature~ is ~END_SRC~, switch back to org mode syntax
-
-(defun handle-feature-end-src (stream sub-char numarg)
-  (when debug-literate-lisp-p
-    (format t "found #+END_SRC,start read org part...~%"))
-  (funcall #'sharp-space stream sub-char numarg))
-
-;; if ~feature~ available, read the following object recursively normally.
-
-(defun read-featurep-object (stream)
-  (read stream t nil t))
-
-;; if the feature doesn't exist, read the following object recursively and ignore it.
-
-(defun read-unavailable-feature-object (stream)
-  (let ((*read-suppress* t))
-    (read stream t nil t)
-    (values)))
-
-;; And the new logic to handle lisp syntax "#+":
-
-(defun sharp-plus (stream sub-char numarg)
-  (let ((feature (read-feature-as-a-keyword stream)))
-    (when debug-literate-lisp-p
-      (format t "found feature ~s,start read org part...~%" feature))
-    (cond ((eq :END_SRC feature) (handle-feature-end-src stream sub-char numarg))
-          ((featurep feature)    (read-featurep-object stream))
-          (t                     (read-unavailable-feature-object stream)))))
-
-;; ** Install the new reader syntax.
-;; Let's use a new read table to hold the reader for org syntax.
-
-(defvar *org-readtable* (copy-readtable))
-
-;; Now install the reader function to this read table.
-
-
-
-;; ** tangle an org file
-;; To build lisp file from an org file, we implement a function ~tangle-org-file~.
-;; Argument ~org-file~ is the source org file.
-;; Argument ~keep-test-codes~ is a Boolean value to indicate whether test codes should load.
-;; The basic method is simple here, we use function ~sharp-space~ to ignore all lines should be ignored,
-;; then export all code lines until we reach ~#+end_src~, this process is repeated to end of org file.
-;; This mechanism is good enough because it will not damage any codes in org code blocks.
+;; *** Sharp space reader
+;; The function ~sharp-space~ is called when the reader sees "# ", and reads 
+;; until the next ~#+begin_src~. It coordinates with tangle-org-file via three globals ([[global tangling]]).
+;; If *tangle-keep-org-text* is non-nil those lines
+;; are written to  *tangling-stream*. If *tangling-verbatim* is non-nil the lines
+;; are written verbatim, otherwise they are written as lisp comments. Those 
+;; variables are bound when tangling. During non-tangle reading have no effect.
+;; It then reads the block headers and the source block. Depending on the header
+;; it either emits the source block as code, or considers it plain org text.
 
 (defun sharp-space (stream a b)
   (declare (ignore a b))
@@ -260,229 +243,53 @@
     (terpri *tangling-to-stream*))
   (values))
 
-;; ** make ASDF handle org file correctly
-;; Firstly, let's define a macro so org syntax codes can be compiled and loaded.
+;; *** Sharp plus reader
+;; The #+ sharp-plus reader adds logic modifies the behavior of standard #+.  When this
+;; function is called it reads the next thing (setting *package* to the keyword
+;; package) the result of which is a putative [[http://www.lispworks.com/documentation/HyperSpec/Body/v_featur.htm][feature specification]]. First we check
+;; whether what was read was :END_SRC. If so, that's not a feature specification
+;; but instead a signal that we are moving from a code block to regular org text,
+;; and the sharp-plus reader is called again.
+;; Otherwise it calls featurep to see whether the feature specification is
+;; satisfied and if so it reads the next object. If it is not satisfied it passes
+;; over the object by use of [[http://www.lispworks.com/documentation/HyperSpec/Body/v_rd_sup.htm][~*read-suppress*~]].
+
+(defun sharp-plus (stream sub-char numarg)
+  (let ((feature (let ((*package* #.(find-package :keyword)))
+		   (read stream t nil t))))
+    (when debug-literate-lisp-p
+      (format t "found feature ~s,start read org part...~%" feature))
+    (cond ((eq :END_SRC feature) 
+	   (when debug-literate-lisp-p
+	     (format t "found #+END_SRC,start read org part...~%"))
+	   (funcall #'sharp-space stream sub-char numarg))
+          ((uiop/os:featurep (or feature (subst :literate-test :test feature)))
+	   (read stream t nil t))
+          (t (let ((*read-suppress* t)) (read stream t nil t) (values))))))
+
+;; *** Define and initialize a readtable 
+;; Let's use a new read table to hold the reader for org syntax.
+
+(defvar *org-readtable* (copy-readtable))
+
+;; We will need to install the reader macros we defined in our readtable. This
+;; is a code chunk - the actual installation is done near the end of the file.
+
+;; (:@+ |set read table dispatch functions|
+;;   (set-dispatch-macro-character #\# #\space #'sharp-space *org-readtable*)
+;;   (set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*))
+
+;; Define a macro to invoke use *org-readtable*
+
+(defmacro with-literate-syntax (&body body)
+  `(let ((*readtable* *org-readtable*))
+  ,@body))
 
 
-
-;; Now let's add literate support to ASDF system.
-;; Firstly a new source file class for org files should define in ASDF package.
-
-(eval-when (:load-toplevel :execute)
-  (defclass asdf::org (asdf:cl-source-file)
-  ((asdf::type :initform "org")))  
-  (export (list (intern "ORG" 'asdf)) :asdf))
-
-;; So a new ASDF source file type ~:org~ can define an org file like this
-;; (asdf:defsystem literate-demo
-;;   :components ((:module demo :pathname "./"
-;;                         :components ((:org "readme"))))
-;;   :depends-on (:literate-lisp))
-;; And file ~readme.org~ will load as a lisp source file by ASDF.
-;; Then the new reader syntax for org file installs when ASDF actions perform to every org file.
-
-(defmethod asdf:perform :around (o (c asdf::org))
-  (literate-lisp:with-literate-syntax
-    (call-next-method)))
-
-;; Then after loading this package, one org file can load by ASDF automatically.
-;; ** make Lispworks handle org file correctly
-;; LispWorks can add an [[http://www.lispworks.com/documentation/lw70/LW/html/lw-682.htm][advice]] to a function to change its default behavior, we can take advantage of
-;; this facility to make function ~load~ can handle org file correctly.
-
-#+lispworks
-(lw:defadvice (cl:load literate-load :around) (&rest args)
-  (literate-lisp:with-literate-syntax
-    (apply #'lw:call-next-advice args)))
-(lw:defadvice (cl:compile-file literate-load :around) (&rest args)
-  (literate-lisp:with-literate-syntax
-    (apply #'lw:call-next-advice args)))
-
-;; ** WEB syntax
-;; The [[https://www-cs-faculty.stanford.edu/~knuth/cweb.html][CWEB]] syntax is strong because it can organize multiple code blocks flexiblely when writing structured documentation.
-;; In Common Lisp, we will use a macro to record named code block, then use a macro to insert them later in compiler time.
-;; *** WEB Specification
-;; There are several syntax to recognize:
-;; - (:@= |code block name| &body code-block) \\
-;;   This is a macro to record ~code-block~ as a code block with name ~|code block name|~.
-;; - (:@+= |code block name| &body code-block) \\
-;;   This is a macro to append ~code-block~ to exist code block with name ~|code block name|~.
-;; - (with-web-syntax &body body) \\
-;;   A macro to recognize all WEB syntax codes and replace them to their actual codes.
-;; - (defun-literate name arguments &body body) \\
-;;   A macro to enable web syntax in original ~defun~.
-;; - (:@ |code block name|) \\
-;;   The codes for ~|code block name|~ will replace above list, just like [[http://www.lispworks.com/documentation/HyperSpec/Body/02_df.htm][Backquote]] syntax `(x1 x2 ,x3).
-;; - (:@@ |code block name|) \\
-;;   The every item of code list for ~|code block name|~ will replaced into parent list place, just like [[http://www.lispworks.com/documentation/HyperSpec/Body/02_df.htm][Backquote]] syntax `(x1 x2 ,@x3).
-;; *** implementation
-;; **** The storage and creation of code blocks
-;; Let's store all named code blocks in a hash table.
-;; The key is ~|code block name|~, it can be any lisp object only if they can compare with ~equalp~.
-
-;; (:@= |defvars| 
-;;   (defvar named-code-blocks nil))
-
-;; Let's implement macro ~@=~ to record a code block.
-
-(defmacro @= (name &body body)
-  (if (nth-value 1 (gethash name named-code-blocks))
-    (warn "code block ~a has been updated" name))
-  (setf (gethash name named-code-blocks) body)
-  `(progn
-     #+lispworks
-     (dspec:def (type ,name))
-     ',name))
-
-;; Let's implement macro ~@+=~ to append to an existing code block.
-
-(defmacro @+= (name &body body)
-  (setf (gethash name named-code-blocks)
-          (append (gethash name named-code-blocks)
-                  body)))
-
-;; New definitions
-
-;; Using |chunk definition macros|
-(defmacro :@= (name &body body)
-(declare (ignore name body)))
-(defmacro :@+= (name &body body)
-(declare (ignore name body)))
-
-;; And an internal macro to get codes from a code block name
-
-(defmacro with-code-chunk ((name codes) &body body)
-  (let ((present-p (gensym "PRESENT-P"))
-        (code-block-name (gensym "NAME")))
-    `(let ((,code-block-name ,name))
-       (let* ((,present-p (gethash (string ,code-block-name) named-code-blocks))
-	      (,codes (mapcan 'read-forms-from-string ,present-p)))
-         (unless ,present-p
-	   (inspect named-code-blocks)
-           (error "Can't find code block:~a" ,code-block-name))
-           ,@body))))
-
-;; **** expand form with WEB syntax
-;; We walk through the lisp form and replace all WEB forms to their actual code block.
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; Using |new definition of expand-web-form|
-  (defun expand-web-form (form)
-  (if (atom form)
-  form
-  (if (eq (car form) :@@)
-  (expand-web-form `(progn ,form))
-  (loop for previous-form = nil then left-form
-  for left-form = form then (cdr left-form)
-  until (or (null left-form)
-  ;; to a dotted list, its `cdr' may be an atom.
-  (atom left-form))
-  when (listp (car left-form))
-  do (let ((head (caar left-form)))
-  (cond ((eq head 'quote) nil) ; ignore a quote list.
-  ((eq head :@)
-  (with-code-chunk ((second (car left-form)) codes)
-  (setf (car left-form) codes)))
-  ((eq head :@@) 
-  (with-code-chunk ((second (car left-form)) codes)
-  (unless codes
-  (error "code block ~a is null for syntax :@@" (second (car left-form))))
-  ;; support recursive web syntax in a code block by expanding the defined code block
-  (let* ((copied-codes (expand-web-form (copy-tree codes)))
-  (last-codes (last copied-codes)))
-  ;; update next form
-  (setf (cdr last-codes) (cdr left-form))
-  ;; update left-form
-  (setf left-form last-codes)
-  (if previous-form
-  (setf (cdr previous-form) copied-codes)
-  (setf form copied-codes)))))
-  (t (setf (car left-form) (expand-web-form (car left-form))))))
-  finally (return form))))))
-
-;; Please have a look of section [[*test for web syntax][test for web syntax]] for a simple test of it.
-;; * Release this file
-;; When a new version of [[./literate-lisp.lisp]] can release from this file,
-;; the following code should execute.
-;; (tangle-org-file
-;;  (format nil "~a/literate-lisp.org"
-;;          (asdf:component-pathname (asdf:find-system :literate-lisp))))
-;; * Test cases
-;; :PROPERTIES:
-;; :literate-load: test
-;; :END:
-;; ** Preparation
-;; Now it's time to validate some functions.
-;; The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used to test.
-;; (eval-when (:compile-toplevel :load-toplevel :execute)
-;;   (unless (find-package :fiveam)
-;;     #+quicklisp (ql:quickload :fiveam)
-;;     #-quicklisp (asdf:load-system :fiveam)))
-;; (5am:def-suite literate-lisp-suite :description "The test suite of literate-lisp.")
-;; (5am:in-suite literate-lisp-suite)
-;; ** test groups
-;; *** test for reading org code block header-arguments
-;; label:test-read-org-code-block-header-arguments
-;; (5am:test read-org-code-block-header-arguments
-;;   (5am:is (equal nil (read-org-code-block-header-arguments "" 0)))
-;;   (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no  " 0)))
-;;   (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no" 0))))
-;; *** test for web syntax
-;; **** a simple test
-;; define local variables 1
-;; (:@= |local variables part 1 for test1|
-;;     (x 1))
-;; a code block contains other code block name.
-;; (:@= |local variables for test1|
-;;     (:@@ |local variables part 1 for test1|)
-;;     (y 2))
-;; define a function
-;; (defun web-syntax-test1 ()
-;;   (let ((a 1)
-;;         (:@@ |local variables for test1|))
-;;     (list a x y)))
-;; Let's test this function
-;; (5am:test web-syntax-case1
-;;   (5am:is (equal '(1 1 2) (web-syntax-test1))))
-;; **** special cases
-;; ***** dotted list to expand
-;; (5am:test web-syntax-special-case-for-dotted-list
-;;   (5am:is (equal '(a . b) (expand-web-form '(a . b)))))
-;; *** Other tests
-;;  (:@@ |tests|)
-;; ** run all tests in this library
-;; this function is the entry point to run all tests and return true if all test cases pass.
-;; (defun run-test ()
-;;   (5am:run! 'literate-lisp-suite))
-;; ** run all tests in demo project
-;; To run all tests in demo project ~literate-demo~, please load it by yourself.
-;; * References
-;; - [[http://www.literateprogramming.com/knuthweb.pdf][Literate. Programming.]] by [[https://www-cs-faculty.stanford.edu/~knuth/lp.html][Donald E. Knuth]]
-;; - [[http://www.literateprogramming.com/][Literate Programming]]  a site of literate programming
-;; - [[https://www.youtube.com/watch?v=Av0PQDVTP4A][Literate Programming in the Large]] a talk video from Timothy Daly,one of the original authors of [[https://en.wikipedia.org/wiki/Axiom_(computer_algebra_system)][Axiom]].
-;; - [[https://orgmode.org/worg/org-contrib/babel/intro.html#literate-programming][literate programming in org babel]]
-;; - [[https://github.com/limist/literate-programming-examples][A collection of literate programming examples using Emacs Org mode]]
-;; - [[https://github.com/xtaniguchimasaya/papyrus][papyrus]] A Common Lisp Literate Programming Tool in markdown file
-;; * New sections from alanr
-;; ** Terminology
-;; A [[https://orgmode.org/worg/org-contrib/babel/intro.html#source-code-blocks-org][*source block*]] is a section in the org file delimited by /#+begin_src/ and
-;; /#+end_src/, but not within and org [[https://orgmode.org/manual/Comment-lines.html][comment]] or [[https://orgmode.org/manual/Literal-examples.html][example]].
-;; A *lisp source block* is a common lisp source block.
-;; A *code chunk* is a form, typically a code fragment, within a lisp source block
-;; which has a name and can be substituted in to a lisp source block.
-;; A *code chunk reference* is a way to specify by name what code chunks should be
-;; substituted in it's place.  Code chunk references are of the form
-;; (:@[@] |name|).
-;; A *form* is a lisp sexp
-;; To *tangle* an org file is to transform it in to a lisp source code file that can be loaded by
-;; a lisp implementation unaware of org syntax.
-;; *NOTE*: In the original the term /code block/ was used for what we call here
-;; /code chunk/. I changed the term so it would be easier to distinguish from
-;; source code blocks, and to match the terminology I've seen elsewhere. 
-;; ** Working with strings representing code
-;; *** Parsing
-;; When tangling the org file, and when working with code chunks, we will
-;; mostly use and manipulate strings rather than sexps.
+;; ** Working with strings representing code 
+;; When tangling the org file, and when working with code chunks, we will mostly
+;; use and manipulate strings rather than forms. 
+;; A string of a code chunk can have several forms, and a code chunk can comprise several strings.
 ;; read-forms-from-string takes a string as input, and reads each form in
 ;; the string, returning a list of forms.
 
@@ -492,12 +299,13 @@
 	  until (eq form :eof)
 	  collect form)))
 
-;; get-forms-as-strings takes a string with a number of forms and returns
-;; a list of strings, each the string representation of one of the forms.
-;; We use read *read-suppress* in order to avoid side-effects, and in
-;; order to group feature expressions with their subsequent form.
-;; However, due to a [[https://github.com/armedbear/abcl/issues/123][bug in ABCL]], we use file-position to detect when we've hit end of
-;; file. Fix this when Roswell's ABCL implementation is updated.
+;; get-forms-as-strings takes a string with a number of forms and returns a list of
+;; strings, each the string representation of one of the forms.
+;; We use read *read-suppress* in order to avoid side-effects, and in order to
+;; group feature specifications with their subsequent form.  However, due to a [[https://github.com/armedbear/abcl/issues/123][bug
+;; in ABCL]], we use file-position to detect when we've hit end of file instead of
+;; using read's eof-error-p and eof-value.  Fix this when Roswell's ABCL
+;; implementation is updated.
 
 (defun get-forms-as-strings (string)
   (loop for lastpos = 0 then pos
@@ -510,8 +318,36 @@
 	until (eq pos :eof)
 	collect (subseq string lastpos pos)))
 
-;; ** Working with source blocks and code chunks
-;; *** Iterating over source blocks as strings
+;; ** Working with code chunks
+;; *** The storage and creation of code blocks
+;; Let's store all named code blocks in a hash table.
+;; The key is ~|code block name|~, it can be any lisp object only if they can compare with ~equalp~.
+
+;; (:@+ |defvars| 
+;;   (defvar named-code-blocks nil))
+
+;; *** Collecting code chunks
+;; In order to handle cases where the code blocks are defined after they
+;; are used, a separate pass is used to collect the code blocks which will
+;; subsequently be used to substitute for the code chunk references.
+;; Code chunks have the (:@+ |name| code). 
+;; gather-code-chunks returns a hash table with the keys being names of
+;; code chunk and the values being a list of strings comprising the code chunk.
+;; We check to make sure we aren't redefining a code chunk, and that
+;; when we are adding the code chunk there's already one there to add to.
+
+(defun gather-code-chunks (org-file)
+  (let ((code-blocks (make-hash-table :test 'equalp)))
+    (each-source-form-as-string
+     org-file
+     (lambda(block)
+       (cl-ppcre::register-groups-bind (name body)
+	   ("(?s)^\\s*\\(:@[+]\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
+	 (push body (gethash name code-blocks)))))
+    code-blocks))
+
+;; *Note*: named-code-blocks is only used dynamically so it might as well be initialized to nil.
+;; *** Iterating over code chunks as strings
 ;; each-source-block-as-string calls fn on each lisp source block, as
 ;; string, in the org file. We will use it when tangling the code.
 
@@ -545,46 +381,7 @@
    org-file
    (lambda (block) (map nil fn (get-forms-as-strings block)))))
 
-;; *** Collecting code chunks
-;;     In order to handle cases where the code blocks are defined after they
-;; are used, a separate pass is used to collect the code blocks which will
-;; subsequently be used to substitute for the code chunk references.
-;; Code chunks have the form (:@= |name| code) or (:@+= |name| code). The former
-;; defines the first (and possibly only) code for the chunk. The latter
-;; adds to an already defined code chunk.
-;; gather-code-chunks returns a hash table with the keys being names of
-;; code chunk and the values being a list of strings comprising the code chunk.
-;; We check to make sure we aren't redefining a code chunk, and that
-;; when we are adding the code chunk there's already one there to add to.
-
-(defun gather-code-chunks (org-file)
-  (let ((code-blocks (make-hash-table :test 'equalp)))
-    (each-source-form-as-string
-     org-file
-     (lambda(block)
-       (cl-ppcre::register-groups-bind (directive name body)
-	   ("(?s)^\\s*\\((:?@[+]{0,1}=)\\s+\\|([^|]+)\\|\\s*(.*)\\)" block)
-	 (if (equal directive ":@+=")
-	     (progn
-	       (if *error-if-adding-to-unknown-block*
-		   (assert (gethash name code-blocks) () "@+= ~a but that block hasn't been seen before" name))
-	       (push body (gethash name code-blocks)))
-	     (progn
-	       (assert (not (gethash name code-blocks)) () "@= ~a found but there's already a code block by that name" name)
-	       (setf (gethash (string name) code-blocks) (list body)))))))
-    code-blocks))
-
-;; *Note*: Maybe we don't need to have two forms - we could just have :@=
-;; which either creates or adds to a chunk. To play set *error-if-adding-to-unknown-block* 
-;; to nil and only use :@+=.  I'm thinking this is the way to go, and to have a single ':@+' marker.
-;; On the same subject we could also deprecate :@ in favor of always using :@@, since :@ == (:@@).
-;; If we only use one then we can rename :@@ to :@.
-
-;; (:@+= |defvars|
-;;   (defvar *error-if-adding-to-unknown-block* t))
-
-;; *Note*: named-code-blocks is only used dynamically so it might as well be initialized to nil.
-;; *** Substituting code chunks in source blocks when tangling
+;; *** Translate forms as strings with chunk references to ones with the actual chunks
 ;; Code chunks can be substituted into source blocks or other code chunks.
 ;; Substitution is done recursively. If a reference to a code chunk is found, and
 ;; the code chunk refers to another code chunk, that is also substituted.
@@ -609,7 +406,7 @@
 		    collect (subseq string (aref reg-starts (1- group)) (aref reg-ends (1- group))))))))
 
 ;; The test shows an example where numbers are translated into their english words.
-;; (:@= |tests|
+;; (:@+ |tests|
 ;;  (5am:test replace-all
 ;;   (5am:is (equal "one two three"
 ;; 		 (replace-all "1 2 3" "(\\d+)"
@@ -619,7 +416,7 @@
 ;; references, we keep track of what we are substituting, recurively, with the
 ;; variable *trace-substitutions*
 
-;; (:@+= |defvars|
+;; (:@+ |defvars|
 ;;      (defvar *trace-substitution* nil))
 
 ;; The input argument to maybe-substitute-code-block is the form (as string) for
@@ -628,36 +425,34 @@
 ;; We make some make some effort here to present the substituted chunks reasonably.
 
 (defun maybe-substitute-code-block (input code-chunks)
-  (replace-all input "(?s)(\\(:(@{1,2})\\s*\\|([^|]+)\\|\\s*\\))"
-	       (lambda(whole op name)
+  (replace-all input "(?s)(\\(:@\\s*\\|([^|]+)\\|\\s*\\))"
+	       (lambda(whole name)
 		 (let* (;; Using |figure out indentation|
-          (pos (some (lambda(e) (search whole e :test 'char=))
-          (cl-ppcre::split "\\n" input)))
-          (indent (subseq (load-time-value (format nil "~80:a" " ")) 0 pos)))
+(pos (some (lambda(e) (search whole e :test 'char=))
+		(cl-ppcre::split "\\n" input)))
+     (indent (subseq (load-time-value (format nil "~80:a" " ")) 0 pos)))
 		   (assert (gethash name code-chunks) () "Code block '~a' called for, but not defined" name)
 		   (if (member name *trace-substitution* :test 'equalp)
 		       (error "Circularity in code blocks: |~a| uses ~{|~a|~^ uses~}"
 			      name (reverse *trace-substitution*))
 		       (let ((*trace-substitution* (cons name *trace-substitution*)))
-			 (let ((sub ;; Using |compute string to insert|
-               (format nil ";; Using |~a|~%~{~a~}" name
-               (mapcar (lambda(e)
-               (format nil "~a"
-               (ppcre::regex-replace-all
-               "(?m)(^\\s*)"
-               (maybe-substitute-code-block e code-chunks)
-               indent)))
-               (gethash name code-chunks)))))
-			   (if (equal op "@@")
-			       sub
-			       (format nil "(~a)" sub)))))))
-	       1 2 3))
+			 ;; Using |compute string to insert|
+(format nil ";; Using |~a|~%~{~a~}" name
+	     (mapcar (lambda(e)
+		       (format nil "~a"
+;			       (ppcre::regex-replace-all
+;				"(?m)(^\\s*)"
+				(maybe-substitute-code-block e code-chunks)
+				;;				indent)
+				))
+		     (gethash name code-chunks)))))))
+	       1 2))
 
 ;; To find the indentation, we split the source block into lines, find the first
 ;; line containing the chunk reference, and use the position in that line to
 ;; determine indentation of the chunk.
 
-;; (:@= |figure out indentation|
+;; (:@+ |figure out indentation|
 ;;      (pos (some (lambda(e) (search whole e :test 'char=))
 ;; 		(cl-ppcre::split "\\n" input)))
 ;;      (indent (subseq (load-time-value (format nil "~80:a" " ")) 0 pos)))
@@ -667,42 +462,77 @@
 ;; trimming leading spaces, and prepending by the computed indentation.
 ;; /This doesn't work well - fix/
 
-;; (:@= |compute string to insert|
+;; (:@+ |compute string to insert|
 ;;      (format nil ";; Using |~a|~%~{~a~}" name
 ;; 	     (mapcar (lambda(e)
 ;; 		       (format nil "~a"
-;; 			       (ppcre::regex-replace-all
-;; 				"(?m)(^\\s*)"
+;; ;			       (ppcre::regex-replace-all
+;; ;				"(?m)(^\\s*)"
 ;; 				(maybe-substitute-code-block e code-chunks)
-;; 				indent)))
+;; 				;;				indent)
+;; 				))
 ;; 		     (gethash name code-chunks))))
 
-;; ** Redefined functions
-;; *** sharp-space
-;; The main changes here are that while sharp-space is responsible for skipping
-;; over everything that isn't lisp code to export, it now also writes out,
-;; optionally, the org mode content (except for directives and comments) to the
-;; tangled file, as lisp comments.
-;; Three globals control this behavior.
-;; *tangling-to-stream* is bound to a stream when we want to also output org mode
-;; text to the tangled file.
-;; *tangling-keep-org-text* controls whether to copy to the org mode text, as
-;; lisp comments, to the tangled file.
-;; *tangling-verbatim* if non-nil has the org mode text copied, verbatim, to the
-;; tangled file. Mostly for debugging. Sort of recreates the original file, but
-;; with the substitutions done.
+;; *** Translate forms with chunk references to ones with the actual chunks.
+;; This code handles the case when we are evaluating, loading, or compiling. It
+;; is not used in tangling to a file. 
+;; This macro is responsible for retrieving a code chunk, which is represented as a
+;; list of strings, into a list of forms used in the transformations.
 
-;; (:@+= |defvars|
-;;   (defvar *tangling-to-stream* nil)
-;;   (defvar *tangle-keep-org-text* nil)
-;;   (defvar *tangling-verbatim* nil)
-;;   )
+(defmacro with-code-chunk ((name codes) &body body)
+  (let ((present-p (gensym "PRESENT-P"))
+        (code-block-name (gensym "NAME")))
+    `(let ((,code-block-name ,name))
+       (let* ((,present-p (gethash (string ,code-block-name) named-code-blocks))
+	      (,codes (mapcan 'read-forms-from-string ,present-p)))
+         (unless ,present-p
+	   (inspect named-code-blocks)
+           (error "Can't find code block:~a" ,code-block-name))
+           ,@body))))
 
-;; The logic remains the same, but with writing code incorporated appropriately.
-;; *** tangle-org-file
-;; Major rewrite. First to incorporate the options to include the org mode text in
-;; the tangled file, either as it was or as a lisp comment, as well as do the
-;; substitutions of code chunks, so that literate-lisp runtime is not required to load it.
+;; Our function expand-web-form walks through a lisp form and replaces all chunk
+;; references with their chunks. Those chunks may need expansion as well, so
+;; this is done recursively. Some [[tests for web syntax]] are here.
+
+(defun expand-web-form (form)
+  (if (atom form)
+      form
+      (if (eq (car form) :@)
+	  (expand-web-form `(progn ,form))
+	  (loop for previous-form = nil then left-form
+		for left-form = form then (cdr left-form)
+		until (or (null left-form)
+			  ;; to a dotted list, its `cdr' may be an atom.
+			  (atom left-form))
+		when (listp (car left-form))
+		  do (let ((head (caar left-form)))
+		       (cond ((eq head 'quote) nil) ; ignore a quote list.
+			     ((eq head :@) 
+			      (with-code-chunk ((second (car left-form)) codes)
+				(unless codes
+				  (error "code block ~a is null for syntax :@" (second (car left-form))))
+				;; support recursive web syntax in a code block by expanding the defined code block
+				(let* ((copied-codes (expand-web-form (copy-tree codes)))
+				       (last-codes (last copied-codes)))
+				  ;; update next form
+				  (setf (cdr last-codes) (cdr left-form))
+				  ;; update left-form
+				  (setf left-form last-codes)
+				  (if previous-form
+				      (setf (cdr previous-form) copied-codes)
+				      (setf form copied-codes)))))
+			     (t (setf (car left-form) (expand-web-form (car left-form))))))
+		finally (return form)))))
+
+;; *** Define the chunk definition as a noop
+;; All work of processing these is in gather-code-chunks. If lisp happens to evaluate them
+;; then nothing bad happens.
+
+(defmacro :@+ (name &body body)
+  (declare (ignore name body)))
+
+;; ** Tangling the org file
+;; Argument ~keep-test-codes~ is a Boolean value to indicate whether test codes should load.
 
 (defun tangle-org-file (org-file &key
 				   (keep-test-codes nil)
@@ -720,27 +550,27 @@
 					:if-does-not-exist :create
 					:if-exists :supersede)
       ;; Using |write header|
-      (unless *tangling-verbatim*
-      (format output ";;; This file is automatically generated from the literate-lisp file '~a.~a'.~%"
-      (pathname-name org-file) (pathname-type org-file))
-      (format output ";;; It is meant to be loaded by a common lisp directly, without depending on literate-lisp.~%"))
+(unless *tangling-verbatim*
+	(format output ";;; This file is automatically generated from the literate-lisp file '~a.~a'.~%"
+		(pathname-name org-file) (pathname-type org-file))
+	(format output ";;; It is meant to be loaded by a common lisp directly, without depending on literate-lisp.~%"))
       (if *tangle-keep-org-text*
-      (format output "~{~a~%~}~%"
-      '(";;; This file keeps all text in the original file as lisp comments, except"
-      ";;; for the org-mode comments and directives."))
-      (format output "~{~a~%~}~%"
-      '(";;; The file is not intended to be read directly as it omits all non-code text from the source."
-      ";;; See the source for full usage and documentation")))
-      
+	  (format output "~{~a~%~}~%"
+		  '(";;; This file keeps all text in the original file as lisp comments, except"
+		    ";;; for the org-mode comments and directives."))
+	  (format output "~{~a~%~}~%"
+		  '(";;; The file is not intended to be read directly as it omits all non-code text from the source."
+		    ";;; See the source for full usage and documentation")))
+  
       (let ((*tangling-to-stream* output))
 	(each-source-block-as-string
 	 org-file
 	 (lambda(block)
 	   ;; Using |write out block with code chunks substituted|
-    (if (ppcre::scan "^\\s*\\(:@\\+?=" block)
-    ;; comment out @+=, @=
-    (format *tangling-to-stream* "~{;; ~a~%~}" (cl-ppcre::split "\\n" block))
-    (write-string (maybe-substitute-code-block block code-blocks) output))))
+(if (ppcre::scan "^\\s*\\(:@[+]" block)
+      ;; comment out code chunks
+      (format *tangling-to-stream* "~{;; ~a~%~}" (cl-ppcre::split "\\n" block))
+      (write-string (maybe-substitute-code-block block code-blocks) output))))
 	(when *tangling-verbatim*
 	  (format *tangling-to-stream* "#+END_SRC~%"))))
 	)) 
@@ -748,9 +578,9 @@
 ;; Checks to see whether this block is a code chunk reference, and if so, substitutes the
 ;; code chunk.
 
-;; (:@= |write out block with code chunks substituted|
-;;   (if (ppcre::scan "^\\s*\\(:@\\+?=" block)
-;;       ;; comment out @+=, @=
+;; (:@+ |write out block with code chunks substituted|
+;;   (if (ppcre::scan "^\\s*\\(:@[+]" block)
+;;       ;; comment out code chunks
 ;;       (format *tangling-to-stream* "~{;; ~a~%~}" (cl-ppcre::split "\\n" block))
 ;;       (write-string (maybe-substitute-code-block block code-blocks) output)))
 
@@ -758,7 +588,7 @@
 ;; file. Then, if we're including the org text, say so, and if not warn that you probably
 ;; need to read the org file to understand it.
 
-;; (:@= |write header|
+;; (:@+ |write header|
 ;;   (unless *tangling-verbatim*
 ;; 	(format output ";;; This file is automatically generated from the literate-lisp file '~a.~a'.~%"
 ;; 		(pathname-name org-file) (pathname-type org-file))
@@ -772,69 +602,60 @@
 ;; 		    ";;; See the source for full usage and documentation")))
 ;;   )
 
-;; *** expand-web-form
-;; Two minor changes here. First is to make sure it works if the form is directly
-;; (:@@ ...).  The second is to change the case form to a cond, so we don't have
-;; the (:@@ clause be candidate for an (error causing) substitution. So instead of
-;; "(case head (:@@ .. " we use "(cond ((eq head :@@))".
+;; *** The globals that control tangling
+;; <<global tangling>>
+;; *tangling-to-stream* is bound to a stream when we want to also output org mode
+;; text to the tangled file.
+;; *tangling-keep-org-text* controls whether to copy to the org mode text, as
+;; lisp comments, to the tangled file.
+;; *tangling-verbatim* if non-nil has the org mode text copied, verbatim, to the
+;; tangled file. Mostly for debugging. Sort of recreates the original file, but
+;; with the substitutions done.
 
-;; (:@= |new definition of expand-web-form|
-;;   (defun expand-web-form (form)
-;;     (if (atom form)
-;; 	form
-;; 	(if (eq (car form) :@@)
-;; 	    (expand-web-form `(progn ,form))
-;; 	    (loop for previous-form = nil then left-form
-;; 		  for left-form = form then (cdr left-form)
-;; 		  until (or (null left-form)
-;; 			    ;; to a dotted list, its `cdr' may be an atom.
-;; 			    (atom left-form))
-;; 		  when (listp (car left-form))
-;; 		    do (let ((head (caar left-form)))
-;; 			 (cond ((eq head 'quote) nil) ; ignore a quote list.
-;; 			       ((eq head :@)
-;; 				(with-code-chunk ((second (car left-form)) codes)
-;; 				  (setf (car left-form) codes)))
-;; 			       ((eq head :@@) 
-;; 				(with-code-chunk ((second (car left-form)) codes)
-;; 				  (unless codes
-;; 				    (error "code block ~a is null for syntax :@@" (second (car left-form))))
-;; 				  ;; support recursive web syntax in a code block by expanding the defined code block
-;; 				  (let* ((copied-codes (expand-web-form (copy-tree codes)))
-;; 					 (last-codes (last copied-codes)))
-;; 				    ;; update next form
-;; 				    (setf (cdr last-codes) (cdr left-form))
-;; 				    ;; update left-form
-;; 				    (setf left-form last-codes)
-;; 				    (if previous-form
-;; 					(setf (cdr previous-form) copied-codes)
-;; 					(setf form copied-codes)))))
-;; 			       (t (setf (car left-form) (expand-web-form (car left-form))))))
-;; 		  finally (return form))))))
+;; (:@+ |defvars|
+;;   (defvar *tangling-to-stream* nil)
+;;   (defvar *tangle-keep-org-text* nil)
+;;   (defvar *tangling-verbatim* nil)
+;;   )
 
-;; Set up the dispatch table at the end, so that it can use the redefined functions.
+;; ** Ensuring that code chunk references are expanded when loading or compiling
+;; *** make Lispworks handle org file correctly
+;; LispWorks can add an [[http://www.lispworks.com/documentation/lw70/LW/html/lw-682.htm][advice]] to a function to change its default behavior, we can take advantage of
+;; this facility to make function ~load~ can handle org file correctly.
 
-;; (:@= |set read table dispatch functions|
-;;   (set-dispatch-macro-character #\# #\space #'sharp-space *org-readtable*)
-;;   (set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*))
+#+lispworks
+(lw:defadvice (cl:load literate-load :around) (&rest args)
+  (literate-lisp:with-literate-syntax
+    (apply #'lw:call-next-advice args)))
+#+lispworks
+(lw:defadvice (cl:compile-file literate-load :around) (&rest args)
+  (literate-lisp:with-literate-syntax
+    (apply #'lw:call-next-advice args)))
 
-;; ** Compiling and loading
 ;; When loading, we use expand-web-form and a modified with-code-chunk to do the
 ;; substitutions when they are needed.
+;; To handle cases where we have a reference that's not inside a defun we define
+;; :@ as a macro that uses expand-web-form to substitute it's chunk.
+
+(defmacro :@ (&whole whole name)
+  (declare (ignore name))
+  (expand-web-form `(progn ,whole)))
+
+
 ;; There are two aspects making loading and compile work. First, we need to hook
 ;; common lisp's load and compile-file to first build the hash table
 ;; named-code-blocks. Then we need to modify defun in to transform its arguments
 ;; and body using expand-web-form. Finally, we need to modify
 ;; with-code-block to read the strings that have been recorded with
 ;; gather-code-chunks so the resultant forms can be included.
-;; *** Modifying the Common Lisp functions
+;; *** others
 ;; The main obstacle is that many of the lisps have distinct mechanisms for
 ;; protecting against accidental modification of the bases system.  This code
 ;; provides a macro within which we can change something in the common-lisp
 ;; package. It has been tested using Roswell for abcl-bin, ccl-bin, sbcl-bin, ecl,
 ;; cmu-bin, and allegro.
 
-;; (:@= |let common-lisp package be modified|
+;; (:@+ |let common-lisp package be modified|
 ;;       (defmacro without-cl-locked (&body body)
 ;;   `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
 ;;      #+SBCL sb-ext::without-package-locks
@@ -847,7 +668,7 @@
 ;; We want to change defun dynamically, only when we are loading or compiling an
 ;; org file. This uses unwind-protect to do that for any lisp /place/.
 
-;; (:@= |letf dynamically binds any place|
+;; (:@+ |letf dynamically binds any place|
 ;;   (defmacro letf-without-cl-lockeds (bindings &body body)
 ;;     (if (null bindings)
 ;;       `(progn ,@body)
@@ -865,7 +686,7 @@
 ;; after we've changed them. While most of the lisps expand defun when compiling,
 ;; ABCL doesn't and so we need to hook a compiler function: jvm::compile-defun.
 
-;; (:@+= |defvars|
+;; (:@+ |defvars|
 ;;   (defvar *save-load* #'load)
 ;;   (defvar *save-defun* (macro-function 'defun))
 ;;   (defvar *save-compile-file* #'compile-file)
@@ -881,7 +702,7 @@
 ;; The first argument to the macro function is the whole form, which we reconstruct,
 ;; first expanding using expand-web-form.
 
-;; (:@= |defun for use in org files|
+;; (:@+ |defun for use in org files|
 ;;   (defmacro shadow-defun (name args &body body &environment env)
 ;;     ;; SBCL needs this decl - does something that makes it
 ;;     ;; thing named-code-blocks is lexical
@@ -893,7 +714,7 @@
 ;; The ABCL compiler function is modified to check whether we're working with an org file,
 ;; and, if so, first call expand-web-form on the body, which is it's second argument.
 
-;; (:@= |hook abcl's compile-defun|
+;; (:@+ |hook abcl's compile-defun|
 ;;   (progn #+ABCL
 ;;   (defun jvm::compile-defun (&rest args)
 ;;     (if '(and imdone (or *load-truename*  *compile-file-pathname*))
@@ -909,19 +730,11 @@
 ;; shouldn't need that, as it is defined using defvar however, SBCL does something
 ;; funny and will consider it lexical unless we explicitly say not to.
 
-(defmacro :@@ (&whole whole name)
-  (declare (ignore name))
-  (lp::expand-web-form `(progn ,whole)))
-(defmacro with-literate-syntax (&body body)
-  `(let ((*readtable* *org-readtable*))
-       ,@body))
-
-
-;; (:@+= |defvars|
+;; (:@+ |defvars|
 ;;   (defvar imdone nil))
 
 
-;; (:@= |hook load|
+;; (:@+ |hook load|
 ;;   (without-cl-locked
 ;;       (defun load (path &rest args)
 ;; 	(if '(and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
@@ -935,7 +748,7 @@
 
 ;; compile-file is hooked in exactly the same way.
 
-;; (:@= |hook compile-file|
+;; (:@+ |hook compile-file|
 ;;   (without-cl-locked
 ;;       (defun compile-file (path &rest args)
 ;; 	(if (and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
@@ -950,68 +763,68 @@
 ;; All of the patching needs to be done inside an eval-when.
 
   ;; Using |hook abcl's compile-defun|
-  (progn #+ABCL
+(progn #+ABCL
   (defun jvm::compile-defun (&rest args)
-  (if '(and imdone (or *load-truename*  *compile-file-pathname*))
-  (apply *save-compile-defun*
-  (first args) (expand-web-form (second args))
-  (cddr args))
-  (apply *save-compile-defun* args)
-  ))) ; any time ok.
+    (if '(and imdone (or *load-truename*  *compile-file-pathname*))
+	(apply *save-compile-defun*
+	       (first args) (expand-web-form (second args))
+	       (cddr args))
+	(apply *save-compile-defun* args)
+	))) ; any time ok.
 #+(or abcl sbcl ccl cmu ecl )
 (eval-when (:load-toplevel :execute)
   ;; Using |let common-lisp package be modified|
-  (defmacro without-cl-locked (&body body)
+(defmacro without-cl-locked (&body body)
   `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
-  #+SBCL sb-ext::without-package-locks
-  #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
-  #+CMU extensions::without-package-locks
-  #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
-  #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
-  ,@body))
+     #+SBCL sb-ext::without-package-locks
+     #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
+     #+CMU extensions::without-package-locks
+     #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
+     #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
+     ,@body))
   ;; Using |letf dynamically binds any place|
-  (defmacro letf-without-cl-lockeds (bindings &body body)
-  (if (null bindings)
-  `(progn ,@body)
-  (let ((save (gensym)))
-  `(let ((,save ,(caar bindings)))
-  (letf-without-cl-lockeds ,(cdr bindings)
-  (unwind-protect (progn
-  (without-cl-locked
-  (setf ,(caar bindings) ,(second (car bindings))))
-  ,@body)
-  (without-cl-locked
-  (setf ,(caar bindings) ,save))))))))
+(defmacro letf-without-cl-lockeds (bindings &body body)
+    (if (null bindings)
+      `(progn ,@body)
+      (let ((save (gensym)))
+	`(let ((,save ,(caar bindings)))
+	   (letf-without-cl-lockeds ,(cdr bindings)
+	     (unwind-protect (progn
+			       (without-cl-locked
+				   (setf ,(caar bindings) ,(second (car bindings))))
+			       ,@body)
+	       (without-cl-locked
+		   (setf ,(caar bindings) ,save))))))))
   ;; Using |defun for use in org files|
-  (defmacro shadow-defun (name args &body body &environment env)
-  ;; SBCL needs this decl - does something that makes it
-  ;; thing named-code-blocks is lexical
-  (declare (special named-code-blocks))
-  (funcall *save-defun*
-  `(defun ,name ,(expand-web-form args)
-  ,@(expand-web-form body)) env))
+(defmacro shadow-defun (name args &body body &environment env)
+    ;; SBCL needs this decl - does something that makes it
+    ;; thing named-code-blocks is lexical
+    (declare (special named-code-blocks))
+    (funcall *save-defun*
+	     `(defun ,name ,(expand-web-form args)
+		,@(expand-web-form body)) env))
   ;; Using |hook load|
-  (without-cl-locked
-  (defun load (path &rest args)
-  (if '(and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-  :test 'equalp))
-  (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
-  (let ((named-code-blocks (gather-code-chunks path )))
-  (declare (special named-code-blocks))
-  (with-literate-syntax
-  (apply *save-load* path args))))
-  (apply *save-load* path args))))
+(without-cl-locked
+      (defun load (path &rest args)
+	(if '(and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
+		    :test 'equalp))
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (gather-code-chunks path )))
+		(declare (special named-code-blocks))
+		(with-literate-syntax
+		  (apply *save-load* path args))))
+	    (apply *save-load* path args))))
   ;; Using |hook compile-file|
-  (without-cl-locked
-  (defun compile-file (path &rest args)
-  (if (and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-  :test 'equalp))
-  (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
-  (let ((named-code-blocks (gather-code-chunks path )))
-  (declare (special named-code-blocks))
-  (with-literate-syntax
-  (apply *save-compile-file* path args))))
-  (apply *save-compile-file* path args)))))
+(without-cl-locked
+      (defun compile-file (path &rest args)
+	(if (and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
+		    :test 'equalp))
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (gather-code-chunks path )))
+		(declare (special named-code-blocks))
+		(with-literate-syntax
+		  (apply *save-compile-file* path args))))
+	    (apply *save-compile-file* path args)))))
 
 #-(or abcl sbcl ccl cmu ecl)
 (warn "Didn't know how to patch a common lisp defined defun or defmacro, so load and compile of org files won't work. Use the tangled file")
@@ -1025,32 +838,94 @@
     #+ABCL
     (setf (symbol-function 'jvm::compile-defun) *save-compile-defun*))) 
 
-;; ** Modifying with-code-block -> with-code-chunk
-;; In the original version the values of named-code-blocks were a list of forms.
-;; Here they are strings, each of which could have several forms. To construct
-;; the old version we use append the result of calling read-forms-from-string on each
-;; string.
-;; Finally, because we are using expand-web-form before the form
-;; even makes it to be in the body of a function, the :@= :@+= 
-;; need to just ignore their arguments, as far as lisp is concerned.
-;; Note: These were previously in the lp package, but making them 
-;; keywords let's us not worry about package mixups.
+;; ** ASDF support for org file as source code
+;; Define a new source file class for org files. The class name needs to be in the ASDF package.
+;; With this one uses :org as the component type in your system defs.
 
-;; (:@= |chunk definition macros|
-;;  (defmacro :@= (name &body body)
-;;   (declare (ignore name body)))
-;; 
-;; (defmacro :@+= (name &body body)
-;;   (declare (ignore name body))))
+(eval-when (:load-toplevel :execute)
+  (defclass asdf::org (asdf:cl-source-file)
+  ((asdf::type :initform "org")))  
+  (export (list (intern "ORG" 'asdf)) :asdf)) ; was having package problems using asdf:org or asdf::org
 
-;; ** No longer needed 
-;; - defun-literate
-;; - with-web-syntax
-;; old definitions of
-;; - @=
-;; - @+=
-;; None of the above in the initial export.
-;; ** And for the grand finale
+;; Here's an example of its use. Now when you load the system 
+;; ~readme.org~ will loaded as a lisp source file.
+;; (asdf:defsystem literate-demo
+;;   :components ((:module demo :pathname "./"
+;;                         :components ((:org "readme"))))
+;;   :depends-on (:literate-lisp))
+;; To implement this behavior, we put an :around method on asdf:perform that sets the readtable 
+;; to *org-readtable*.
+
+(defmethod asdf:perform :around (o (c asdf::org))
+  (literate-lisp:with-literate-syntax
+    (call-next-method)))
+
+;; * Release this file
+;; When a new version of [[./literate-lisp.lisp]] can release from this file,
+;; the following code should execute.
+;; (tangle-org-file
+;;  (format nil "~a/literate-lisp.org"
+;;          (asdf:component-pathname (asdf:find-system :literate-lisp))))
+;; * Test cases
+;; :PROPERTIES:
+;; :literate-load: test
+;; :END:      
+;; ** Preparation
+;; Now it's time to validate some functions.
+;; The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used to test.
+;; (eval-when (:compile-toplevel :load-toplevel :execute)
+;;   (unless (find-package :fiveam)
+;;     #+quicklisp (ql:quickload :fiveam)
+;;     #-quicklisp (asdf:load-system :fiveam)))
+;; (5am:def-suite literate-lisp-suite :description "The test suite of literate-lisp.")
+;; (5am:in-suite literate-lisp-suite)
+;; ** test groups
+;; *** test for reading org code block header-arguments
+;; <<block header test>>
+;; (5am:test read-org-code-block-header-arguments
+;;   (5am:is (equal nil (read-org-code-block-header-arguments "" 0)))
+;;   (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no  " 0)))
+;;   (5am:is (equal '(:load :no) (read-org-code-block-header-arguments " :load no" 0))))
+;; *** tests for web syntax
+;; **** a simple test
+;; define local variables 1
+;; (:@+ |local variables part 1 for test1|
+;;     (x 1))
+;; a code block contains other code block name.
+;; (:@+ |local variables for test1|
+;;     (:@ |local variables part 1 for test1|)
+;;     (y 2))
+;; define a function
+;; (defun web-syntax-test1 ()
+;;   (let ((a 1)
+;;         (:@ |local variables for test1|))
+;;     (list a x y)))
+;; Let's test this function
+;; (5am:test web-syntax-case1
+;;   (5am:is (equal '(1 1 2) (web-syntax-test1))))
+;; **** special cases
+;; ***** dotted list to expand
+;; (5am:test web-syntax-special-case-for-dotted-list
+;;   (5am:is (equal '(a . b) (expand-web-form '(a . b)))))
+;; *** Other tests
+;;  (:@ |tests|)
+;; ** run all tests in this library
+;; this function is the entry point to run all tests and return true if all test cases pass.
+;; (defun run-test ()
+;;   (5am:run! 'literate-lisp-suite))
+;; ** run all tests in demo project
+;; To run all tests in demo project ~literate-demo~, please load it by yourself.
+;; * References
+;; - [[http://www.literateprogramming.com/knuthweb.pdf][Literate. Programming.]] by [[https://www-cs-faculty.stanford.edu/~knuth/lp.html][Donald E. Knuth]]
+;; - [[http://www.literateprogramming.com/][Literate Programming]]  a site of literate programming
+;; - [[https://www.youtube.com/watch?v=Av0PQDVTP4A][Literate Programming in the Large]] a talk video from Timothy Daly,one of the original authors of [[https://en.wikipedia.org/wiki/Axiom_(computer_algebra_system)][Axiom]].
+;; - [[https://orgmode.org/worg/org-contrib/babel/intro.html#literate-programming][literate programming in org babel]]
+;; - [[https://github.com/limist/literate-programming-examples][A collection of literate programming examples using Emacs Org mode]]
+;; - [[https://github.com/xtaniguchimasaya/papyrus][papyrus]] A Common Lisp Literate Programming Tool in markdown file
+;; * New sections from alanr
+;; ** Bootstrap test
+;; Tangle the org file, load the tangled file, tangle the org file again, make sure
+;; they are same.
 
 (defun files-same? (file1 file2)
   (equal "" (with-output-to-string (s)
@@ -1059,7 +934,7 @@
   :output s))))
 
 ;; Test that we can re-generate literate-lisp
-;; (:@+= |tests|
+;; (:@+ |tests|
 ;;   (5am:test tangle-ok?
 ;; 	    (5am:is 
 ;; 	     (let ((org-path (asdf/system::system-relative-pathname 'literate-lisp "literate-lisp.org")))
@@ -1072,6 +947,8 @@
 ;; 	       (load file1) 
 ;; 	       (funcall (intern "TANGLE-ORG-FILE" 'lp)  org-path  :output-file file2 :keep-test-codes t)
 ;; 	       (files-same? file1 file2))))))
+;; ** Bugs
+;; In
 ;; ** TODO
 ;; - A way to indicate that some portion of text should be used as a docstring.
 ;; - Better formatting/linking of code chunks.
@@ -1080,13 +957,16 @@
 ;; - Quick preview of code block with all substitutions
 ;; - Redirect pieces of the file to different tanged files, e.g. to embed and export asd, test files.
 ;; - Add xref links in exports 
-;; - Simplify to just :@ for inserting code chunk and :@= for both defining and adding to code chunk.
 ;; - C-c C-c eval taking into account code chunks. What should happen when we eval a code chunk? Eval any users?
 ;; - Figure out why poly-org-mode is flakey
+;; ** Why we need to patch defun (and maybe others) AND have the :@ macro.
+;; :@ returns a progn. there's no where to 'splice' if you are at the top level.
+;; Because it's a progn, if we only had :@ we wouldn't be able to use it in lots of
+;; places of special forms like the bindings in let, or arguments to a function.
 
 ;; Using |set read table dispatch functions|
 (set-dispatch-macro-character #\# #\space #'sharp-space *org-readtable*)
-(set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*)
+  (set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*)
 (setq imdone t)
 
 ;; ** Broken
