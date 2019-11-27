@@ -65,6 +65,7 @@
 ;; the environment installed. or source code in the file generate content that
 ;; is included in the document.
 ;; ** Terminology
+;; When talking about literate programming it will be helpful to name a few things.
 ;; A [[https://orgmode.org/worg/org-contrib/babel/intro.html#source-code-blocks-org][*source block*]] is a section in the org file delimited by /#+begin_src/ and
 ;; /#+end_src/, but not within an org [[https://orgmode.org/manual/Comment-lines.html][comment]] or [[https://orgmode.org/manual/Literal-examples.html][example]].
 ;; A *lisp source block* is a common lisp source block.
@@ -164,11 +165,6 @@
 (defvar debug-literate-lisp-p nil)
 (declaim (type boolean debug-literate-lisp-p))
 
-;; And let's define the org code block delimiters. The begin is a string and the end is a keyword (since it is read by ~#+~)
-
-(defvar org-lisp-begin-src-id "#+begin_src lisp")
-(defvar org-lisp-end-src-id  :end_src)
-
 ;; ** Reading the org file
 ;; This support function skips over whitespace. 
 
@@ -210,8 +206,13 @@
                      collect elem))))
 
 ;; *** Sharp space reader
-;; The function ~sharp-space~ is called when the reader sees "# ", and reads 
-;; until the next ~#+begin_src~. It coordinates with tangle-org-file via three globals ([[global tangling]]).
+;; The function ~sharp-space~ is called when the reader sees "# ", and reads until
+;; the next ~#+begin_src~ that isn't nested inside a comment or example.  If it
+;; sees ~#+begin_comment~, it keeps reading and ignoring until it reaches
+;; ~#+end_comment~. If it sees ~#+begin_example~ it keeps reading until
+;; ~#+end_example~, but the text between them is considered worth having
+;; in the tangled file.
+;; It coordinates with tangle-org-file via three globals ([[global tangling]]).
 ;; If *tangle-keep-org-text* is non-nil those lines
 ;; are written to  *tangling-stream*. If *tangling-verbatim* is non-nil the lines
 ;; are written verbatim, otherwise they are written as lisp comments. Those 
@@ -223,25 +224,87 @@
   (declare (ignore a b))
   (when (and *tangling-to-stream* *tangle-keep-org-text*)
     (terpri *tangling-to-stream*))
-  (loop for line = (read-line stream nil nil)
-        until (null line)
-        for start1 = (start-position-after-space-characters line)
-        do (when debug-literate-lisp-p
-             (format t "ignore line ~a~%" line))
-	   (when *tangling-to-stream*
-	     (if *tangling-verbatim*
-		 (write-line line *tangling-to-stream*)
-		 (unless (or (eql 0 (position #\# line :test 'char=))
-			     (ppcre::scan "^\\s*$" line)
-			     (not *tangle-keep-org-text*))
-		   (write-string ";; " *tangling-to-stream*)
-		   (write-line line *tangling-to-stream*))))
-        until (and (equalp start1 (search org-lisp-begin-src-id line :test #'char-equal))
-                   (let* ((header-arguments (read-org-code-block-header-arguments line (+ start1 (length org-lisp-begin-src-id)))))
-                     (load-p (getf header-arguments :load :yes)))))
+  (macrolet ((looking-at (what)
+	       `(eql start1 (search ,what line :test #'char-equal))))
+    (loop for line = (read-line stream nil nil)
+	  with waiting-for = nil
+	  until (null line)
+	  for start1 = (start-position-after-space-characters line)
+	  do
+	     (when debug-literate-lisp-p
+	       (format t "ignore line ~a~%" line))
+	     ;; Using |handle entry to an example or comment|
+(when (not waiting-for)
+       (progn
+	 (when (looking-at "#+begin_comment")
+	   (setq waiting-for "#+end_comment"))
+	 (when (looking-at "#+begin_example")
+	   (setq waiting-for "#+end_example"))))
+	     ;; Using |maybe write an ignored line to tangled file|
+(when *tangling-to-stream*
+       (if *tangling-verbatim*
+	   (write-line line *tangling-to-stream*)
+	   (unless 
+	       ;; Using |should the current line be printed as a comment?|
+(or (and (equal waiting-for "#+end_example")
+	      (or (looking-at "#+begin_example")
+		  (looking-at "#+end_example")))
+	 (and (not waiting-for)
+	      (eql 0 (position #\# line :test 'char=)))
+	 (equalp waiting-for "#+end_comment")
+	 (ppcre::scan "^\\s*$" line)
+	 (not *tangle-keep-org-text*))
+	     (write-string ";; " *tangling-to-stream*)
+	     (write-line line *tangling-to-stream*))))
+	     (if (looking-at waiting-for)
+		 (setq waiting-for nil))
+	  until (and (not waiting-for) (looking-at "#+begin_src lisp")
+	       (let* ((header-arguments (read-org-code-block-header-arguments
+					 line 
+					 (+ start1 (load-time-value (length "#+begin_src lisp"))))))
+		 (load-p (getf header-arguments :load :yes))))))
   (when (and *tangling-to-stream* *tangle-keep-org-text*)
     (terpri *tangling-to-stream*))
   (values))
+
+;; We handle comments and examples by setting the variable waiting-for
+;; to the corresponding end marker
+
+;; (:@+ |handle entry to an example or comment|
+;;      (when (not waiting-for)
+;;        (progn
+;; 	 (when (looking-at "#+begin_comment")
+;; 	   (setq waiting-for "#+end_comment"))
+;; 	 (when (looking-at "#+begin_example")
+;; 	   (setq waiting-for "#+end_example")))))
+
+;; We'll print the current line to the tangled file as long as *tangling-to-stream* is bound.
+;; If verbatim write it out as is. Otherwise write it out unless it's org comments.
+
+;; (:@+ |maybe write an ignored line to tangled file|
+;;      (when *tangling-to-stream*
+;;        (if *tangling-verbatim*
+;; 	   (write-line line *tangling-to-stream*)
+;; 	   (unless 
+;; 	       (:@ |should the current line be printed as a comment?|)
+;; 	     (write-string ";; " *tangling-to-stream*)
+;; 	     (write-line line *tangling-to-stream*)))))
+
+;; We won't print the line if
+;; - it's an empty string
+;; - we have or have been waiting for an end_example, but the line isn't the start of end directive.
+;; - we're not including org text at all 
+;; - It's a comment, either because it's first character is "#" or because it's in an extended #+ comment.
+
+;; (:@+ |should the current line be printed as a comment?|
+;;      (or (and (equal waiting-for "#+end_example")
+;; 	      (or (looking-at "#+begin_example")
+;; 		  (looking-at "#+end_example")))
+;; 	 (and (not waiting-for)
+;; 	      (eql 0 (position #\# line :test 'char=)))
+;; 	 (equalp waiting-for "#+end_comment")
+;; 	 (ppcre::scan "^\\s*$" line)
+;; 	 (not *tangle-keep-org-text*)))
 
 ;; *** Sharp plus reader
 ;; The #+ sharp-plus reader adds logic modifies the behavior of standard #+.  When this
@@ -259,7 +322,7 @@
 		   (read stream t nil t))))
     (when debug-literate-lisp-p
       (format t "found feature ~s,start read org part...~%" feature))
-    (cond ((eq :END_SRC feature) 
+    (cond ((eq :end_src feature) 
 	   (when debug-literate-lisp-p
 	     (format t "found #+END_SRC,start read org part...~%"))
 	   (funcall #'sharp-space stream sub-char numarg))
