@@ -1,7 +1,6 @@
 # -*- Mode: POLY-ORG;  -*- ---
 #+Title: Lilith: Literate Programming for Common Lisp in ORG Mode.
 #+Author:  Alan Ruttenberg
-* Org setup :noexport:
 #+Startup: noindent
 #+SubTitle: Just in one file without tangle
 #+OPTIONS: tex:t toc:2 \n:nil @:t ::t |:t ^:nil -:t f:t *:t <:t
