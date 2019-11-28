@@ -3,7 +3,6 @@
 ;;; |This file keeps all text in the original file as lisp comments, except
 ;;; for the org-mode comments and directives.|
 
-;; * Org setup :noexport:
 ;; * Table of Contents                                               :noexport:TOC:
 ;; - [[#introduction][Introduction]]
 ;;   - [[#terminology][Terminology]]
@@ -24,7 +23,6 @@
 ;;   - [[#preparation-1][Preparation]]
 ;;   - [[#test-groups][test groups]]
 ;;   - [[#run-all-tests-in-this-library][run all tests in this library]]
-;;   - [[#run-all-tests-in-demo-project][run all tests in demo project]]
 ;; - [[#bugs][Bugs]]
 ;; - [[#ideas-and-plans][Ideas and Plans]]
 ;;   - [[#final-setup][Final setup]]
@@ -716,6 +714,7 @@ See the source for full usage and documentation|")))
   :output s))))
 
 ;; Test that we can re-generate lilith
+;; <<twice>>
 ;; (:@+ |tests|
 ;;   (5am:test tangle-ok?
 ;;     (5am:is 
@@ -968,6 +967,8 @@ See the source for full usage and documentation|")))
 ;; (tangle-org-file
 ;;  (format nil "~a/lilith.org"
 ;;          (asdf:component-pathname (asdf:find-system :lilith))))
+;; You might want to load the resultant lilith.lisp and then
+;; export it again. That's what the test in [[twice]] does.
 ;; * Test cases
 ;; :PROPERTIES:
 ;; :literate-load: test
@@ -1015,8 +1016,6 @@ See the source for full usage and documentation|")))
 ;; this function is the entry point to run all tests and return true if all test cases pass.
 ;; (defun run-test ()
 ;;   (5am:run! 'lilith-suite))
-;; ** run all tests in demo project
-;; To run all tests in demo project ~literate-demo~, please load it by yourself.
 ;; * Bugs
 ;; - Doesn't work in Allegro until we can hook compile-defun.
 ;; - (:@) that's not inside a defun, which is saved for evaluation later, does't work. 

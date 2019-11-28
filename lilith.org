@@ -31,7 +31,6 @@
   - [[#preparation-1][Preparation]]
   - [[#test-groups][test groups]]
   - [[#run-all-tests-in-this-library][run all tests in this library]]
-  - [[#run-all-tests-in-demo-project][run all tests in demo project]]
 - [[#bugs][Bugs]]
 - [[#ideas-and-plans][Ideas and Plans]]
   - [[#final-setup][Final setup]]
@@ -784,6 +783,7 @@ they are same.
 						   
 Test that we can re-generate lilith
 
+<<twice>>
 #+begin_src lisp :load test
 (:@+ |tests|
   (5am:test tangle-ok?
@@ -1088,10 +1088,13 @@ When a new version of [[./lilith.lisp]] can release from this file,
 the following code should execute.
 #+caption: a demo code to tangle current org file.
 #+BEGIN_SRC lisp :load no
+
 (tangle-org-file
  (format nil "~a/lilith.org"
          (asdf:component-pathname (asdf:find-system :lilith))))
 #+END_SRC
+You might want to load the resultant lilith.lisp and then
+export it again. That's what the test in [[twice]] does.
 
 * Test cases
 :PROPERTIES:
@@ -1165,9 +1168,6 @@ this function is the entry point to run all tests and return true if all test ca
 (defun run-test ()
   (5am:run! 'lilith-suite))
 #+END_SRC
-
-** run all tests in demo project
-To run all tests in demo project ~literate-demo~, please load it by yourself.
 
 
 * Bugs
