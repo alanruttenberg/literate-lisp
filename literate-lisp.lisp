@@ -25,25 +25,22 @@
 ;;   - [[#test-groups][test groups]]
 ;;   - [[#run-all-tests-in-this-library][run all tests in this library]]
 ;;   - [[#run-all-tests-in-demo-project][run all tests in demo project]]
+;; - [[#bugs][Bugs]]
+;; - [[#ideas-and-plans][Ideas and Plans]]
+;;   - [[#final-setup][Final setup]]
 ;; - [[#references][References]]
-;; - [[#new-sections-from-alanr][New sections from alanr]]
-;;   - [[#bootstrap-test][Bootstrap test]]
-;;   - [[#bugs][Bugs]]
-;;   - [[#todo][TODO]]
-;;   - [[#why-we-need-to-patch-defun-and-maybe-others-and-have-the--macro][Why we need to patch defun (and maybe others) AND have the :@ macro.]]
-;;   - [[#broken][Broken]]
-;;   - [[#working][Working]]
 ;; * Introduction
-;; This is a project to enable [[http://www.literateprogramming.com/][literate programming]] in Common Lisp, leveraging
-;; Emacs' [[https://orgmode.org/][org mode]] along with other emacs packages.  Literate programming is a
-;; style of writing code in the way you would write explanatory prose. Code
-;; can be broken down in a way that supports the narrative, even breaking
-;; functions up into separate, even out of order, chunks in the prose.  At the same time the code
-;; can be put together for the purpose of running it.  Traditional literate
-;; programming tools support taking what you've written and generating two
-;; products. One a nicely typset document suitable for publication, and the
-;; other a plain source code file that can be compiled and executed. 
-;; This project, in part, supports that workflow.
+;; Lilith enables [[http://www.literateprogramming.com/][literate programming]] in Common Lisp, leveraging
+;; Emacs' [[https://orgmode.org/][org mode]] along with other emacs packages. Lilith is inspired by [[https://github.com/jingtaozf/literate-lisp][Jingtao Xu's Literate Lisp project]],
+;; and started as a fork of that project. 
+;; Literate programming is a style of writing code in the way you would write
+;; explanatory prose. Code can be broken down in a way that supports the narrative,
+;; even breaking functions up into separate, even out of order, chunks in the
+;; prose.  At the same time the code can be put together for the purpose of running
+;; it.  Traditional literate programming tools support taking what you've written
+;; and generating two products. One a nicely typset document suitable for
+;; publication, and the other a plain source code file that can be compiled and
+;; executed.  Lilith, in part, supports that workflow.
 ;; We take this further by enabling the org file to act as the source
 ;; file. Just as you would use [[https://common-lisp.net/project/slime/][SLIME]] to work with a lisp file in emacs, the
 ;; project makes it possible to work with SLIME in an org file. Rather than
@@ -58,7 +55,7 @@
 ;; Org mode also makes it possible lisp code to generate content that is
 ;; included in the org file. For example some lisp code might generate a figure 
 ;; that is subsequently included in the document. 
-;; To summarize, this project supports several different ways of writing
+;; To summarize, Lilith supports several different ways of writing
 ;; (code).  You can use the org files directly as your source files, or export
 ;; to pure lisp source files that can be used and distributed without needing
 ;; the environment installed. or source code in the file generate content that
@@ -74,7 +71,7 @@
 ;; A *code chunk reference* is a way to specify by name what code chunk should be
 ;; substituted in it's place.  
 ;; To *tangle* an org file is to transform it in to a lisp source code file that can be loaded by
-;; a lisp implementation unaware of org syntax or this project.
+;; a lisp implementation unaware of org syntax or Lilith.
 ;; * Implementation strategy
 ;; ** Reading 
 ;; In org mode, comment lines start with character ~#~ (see [[https://orgmode.org/manual/Comment-lines.html][org manual]] ),
@@ -110,10 +107,10 @@
 ;; ** Working with code chunks
 ;; We want to support breaking functions up into pieces that can be put back
 ;; together appropriately. Here's the syntax.
-;; | (:@  name)           | replace with the actual chunk by that name                            |
-;; | (:@+ name body)      | Add body to the code chunk named                                      |
-;; | (:@. name freetext ) | Add the text, appropriately escaped for list, to the code chunk named |
-;; Currently names need to be surrounded by "|".
+;; | (:@  name)          | replace with the actual chunk by that name                            |
+;; | (:@+ name body)     | Add body to the code chunk named                                      |
+;; | (:@. name  freetext | Add the text, appropriately escaped for lisp, to the code chunk named |
+;; Currently names need to be surrounded by "|", as well as freetext.
 ;; There can be multiple :@+ forms with the same name - the contents are
 ;; concatenated.  Some care may be need to be take for the freetext within a lisp
 ;; form - it tends to confuse slime mode. You always surround the text with "|" to
@@ -153,12 +150,11 @@
 ;; Define globals
 
   ;; Using |defvars|
-(defvar imdone nil)(defvar *save-load* #'load)
-  (defvar *save-defun* (macro-function 'defun))
+(defvar *save-load* #'load)
   (defvar *save-compile-file* #'compile-file)
-  #+ABCL
-  (defvar *save-compile-defun* #'jvm::compile-defun)
-
+  (defvar *save-defun* (macro-function 'defun))
+#+ABCL
+(defvar *save-compile-defun* #'jvm::compile-defun)
 (defvar *tangling-to-stream* nil)
   (defvar *tangle-keep-org-text* nil)
   (defvar *tangling-verbatim* nil)
@@ -632,7 +628,7 @@
   (unless *tangling-verbatim*
     (in-a-comment ;; Using |explain source|
 "|This file is automatically generated from the literate-lisp file '~a.~a'.
-It is meant to be loaded by a common lisp directly, without depending on lilith|"
+It is meant to be loaded by a common lisp directly, without depending on Lilith|"
 		  (pathname-name org-file) (pathname-type org-file)))
   (if *tangle-keep-org-text*
       (in-a-comment ;; Using |explain comments|
@@ -681,7 +677,7 @@ See the source for full usage and documentation|")))
 
 ;; (:@. |explain source|
 ;; |This file is automatically generated from the literate-lisp file '~a.~a'.
-;; It is meant to be loaded by a common lisp directly, without depending on lilith|)
+;; It is meant to be loaded by a common lisp directly, without depending on Lilith|)
 
 
 ;; (:@. |explain comments|
@@ -709,81 +705,107 @@ See the source for full usage and documentation|")))
 ;;   (defvar *tangling-verbatim* nil)
 ;;   )
 
+;; *** Testing tangling
+;; Tangle the org file, load the tangled file, tangle the org file again and then make sure
+;; they are same.
+
+(defun files-same? (file1 file2)
+  (equal "" (with-output-to-string (s)
+  (uiop/run-program:run-program
+  (format nil "diff ~a ~a" (truename file1) (truename file2))
+  :output s))))
+
+;; Test that we can re-generate literate-lisp
+;; (:@+ |tests|
+;;   (5am:test tangle-ok?
+;; 	    (5am:is 
+;; 	     (let ((org-path (asdf/system::system-relative-pathname 'literate-lisp "literate-lisp.org")))
+;; 	       (pushnew :literate-test *features*)
+;; 	       (let ((file1 (merge-pathnames "ll-1.lisp" uiop/stream:*temporary-directory*))
+;; 		     (file2 (merge-pathnames "ll-2.lisp" uiop/stream:*temporary-directory*)))
+;; 	       (tangle-org-file org-path  :output-file file1 :keep-test-codes t)
+;; 	       (erase-lilith)
+;; 	       (rename-package "LITERATE-LISP" (gensym))
+;; 	       (load file1) 
+;; 	       (funcall (intern "TANGLE-ORG-FILE" 'lp)  org-path  :output-file file2 :keep-test-codes t)
+;; 	       (files-same? file1 file2))))))
 ;; ** Ensuring that code chunk references are expanded when loading or compiling
-;; *** make Lispworks handle org file correctly
-;; LispWorks can add an [[http://www.lispworks.com/documentation/lw70/LW/html/lw-682.htm][advice]] to a function to change its default behavior, we can take advantage of
-;; this facility to make function ~load~ can handle org file correctly.
-
-#+lispworks
-(lw:defadvice (cl:load literate-load :around) (&rest args)
-  (literate-lisp:with-literate-syntax
-    (apply #'lw:call-next-advice args)))
-#+lispworks
-(lw:defadvice (cl:compile-file literate-load :around) (&rest args)
-  (literate-lisp:with-literate-syntax
-    (apply #'lw:call-next-advice args)))
-
-;; When loading, we use expand-web-form and a modified with-code-chunk to do the
-;; substitutions when they are needed.
-;; To handle cases where we have a reference that's not inside a defun we define
-;; :@ as a macro that uses expand-web-form to substitute it's chunk.
+;; There are several aspects making loading and compile work. First we hook
+;; common lisp's load and compile-file to first build the hash table
+;; named-code-blocks before proceeding. Then we hook degun to transform its arguments
+;; and body using expand-web-form. This still leaves top-level chunk references
+;; untouched. For those we define :@ as a macro that wraps the code chunk into
+;; a progn.
 
 (defmacro :@ (&whole whole name)
   (declare (ignore name))
   (expand-web-form `(progn ,whole)))
 
+;; You might as why we need to bother patching defun and instead stop at the :@
+;; macro.  We don't because macros are not expanded in all places, for example in
+;; the bindings section of let, and we want to be able to substitute a code chunk
+;; anywhere.
+;; One obstacle is that not all compilers evaluate the defun while compiling and
+;; this requires patching elsewhere in the compiler. Another obstacle is that a
+;; number of lisps have mechanisms to protect against accidental modification of
+;; the bases system, including all the symbols in the common-lisp package. We'll
+;; start addressing that first.
+;; *** Handling protection
+;; Each system that has this protection implements it in a different way, often
+;; focused on locking changes to a package.  This code provides a macro to unlock,
+;; if necessary, the common-lisp package, conditionalized for a number of lisps,
+;; with the default being to do nothing. It has been tested using Roswell for
+;; abcl-bin, ccl-bin, sbcl-bin, ecl, cmu-bin, and allegro. Please submit an issue
+;; or pr if you are using a lisp that isn't handled correctly here. I don't 
+;; currently have access to lispworks, but the author of literate lisp has 
+;; shown how to /advise/ functions in lispworks so we'll use that in the lispworks 
+;; implementation ([[lispworks implementation]]).
 
-;; There are two aspects making loading and compile work. First, we need to hook
-;; common lisp's load and compile-file to first build the hash table
-;; named-code-blocks. Then we need to modify defun in to transform its arguments
-;; and body using expand-web-form. Finally, we need to modify
-;; with-code-block to read the strings that have been recorded with
-;; gather-code-chunks so the resultant forms can be included.
-;; *** others
-;; The main obstacle is that many of the lisps have distinct mechanisms for
-;; protecting against accidental modification of the bases system.  This code
-;; provides a macro within which we can change something in the common-lisp
-;; package. It has been tested using Roswell for abcl-bin, ccl-bin, sbcl-bin, ecl,
-;; cmu-bin, and allegro.
+(defmacro without-cl-locked (&body body)
+  `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
+     #+SBCL sb-ext::without-package-locks
+     #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
+     #+CMU extensions::without-package-locks
+     #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
+     #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
+     ,@body))
 
-;; (:@+ |let common-lisp package be modified|
-;;       (defmacro without-cl-locked (&body body)
-;;   `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
-;;      #+SBCL sb-ext::without-package-locks
-;;      #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
-;;      #+CMU extensions::without-package-locks
-;;      #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
-;;      #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
-;;      ,@body)))
+;; *** Hooking defun 
+;; We will change defun dynamically, only when we are loading or compiling an
+;; org file. While expand-web-form can be safely applied even when there are code chunks,
+;; why tempt fate. 
+;; I'm still exploring just exactly when we should hook defun. It isn't sufficient
+;; to only hook when the file being loaded or compiled is an org file, as
+;; evaluation can happen when loading fasls as well. Right now the answer is
+;; always. Some of the alternative components are in the comments.
 
-;; We want to change defun dynamically, only when we are loading or compiling an
-;; org file. This uses unwind-protect to do that for any lisp /place/.
+(defun in-a-context-where-we-should-use-expand-web-form () t)
+;; (member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
+;;		    :test 'equalp))
 
-;; (:@+ |letf dynamically binds any place|
-;;   (defmacro letf-without-cl-lockeds (bindings &body body)
-;;     (if (null bindings)
-;;       `(progn ,@body)
-;;       (let ((save (gensym)))
-;; 	`(let ((,save ,(caar bindings)))
-;; 	   (letf-without-cl-lockeds ,(cdr bindings)
-;; 	     (unwind-protect (progn
-;; 			       (without-cl-locked
-;; 				   (setf ,(caar bindings) ,(second (car bindings))))
-;; 			       ,@body)
-;; 	       (without-cl-locked
-;; 		   (setf ,(caar bindings) ,save)))))))))
+;; This macro uses unwind-protect to be able to dynamically bind any lisp /place/.
+
+(defmacro letf-without-cl-lockeds (bindings &body body)
+  (if (null bindings)
+      `(progn ,@body)
+      (let ((save (gensym)))
+	`(let ((,save ,(caar bindings)))
+	   (letf-without-cl-lockeds ,(cdr bindings)
+	     (unwind-protect (progn
+			       (without-cl-locked
+				 (setf ,(caar bindings) ,(second (car bindings))))
+			       ,@body)
+	       (without-cl-locked
+		 (setf ,(caar bindings) ,save))))))))
 
 ;; We'll need to save the values of the original functions to restore them 
 ;; after we've changed them. While most of the lisps expand defun when compiling,
 ;; ABCL doesn't and so we need to hook a compiler function: jvm::compile-defun.
 
 ;; (:@+ |defvars|
-;;   (defvar *save-load* #'load)
-;;   (defvar *save-defun* (macro-function 'defun))
-;;   (defvar *save-compile-file* #'compile-file)
-;;   #+ABCL
-;;   (defvar *save-compile-defun* #'jvm::compile-defun)
-;; 
+;; (defvar *save-defun* (macro-function 'defun))
+;; #+ABCL
+;; (defvar *save-compile-defun* #'jvm::compile-defun)
 ;; )
 
 ;; Define a macro to shadow defun when working with org files. We can do that
@@ -808,28 +830,34 @@ See the source for full usage and documentation|")))
 ;; (:@+ |hook abcl's compile-defun|
 ;;   (progn #+ABCL
 ;;   (defun jvm::compile-defun (&rest args)
-;;     (if '(and imdone (or *load-truename*  *compile-file-pathname*))
+;;     (if (in-a-context-where-we-should-use-expand-web-form)
 ;; 	(apply *save-compile-defun*
 ;; 	       (first args) (expand-web-form (second args))
 ;; 	       (cddr args))
 ;; 	(apply *save-compile-defun* args)
 ;; 	))))
 
+;; *** Hooking load and compile-file
+;; Again, we'll need to save the values of the original functions to restore them 
+;; after we've changed them.
+
+;; (:@+ |defvars|
+;;   (defvar *save-load* #'load)
+;;   (defvar *save-compile-file* #'compile-file)
+;;   )
+
 ;; During loading we want to gather the code chunks to make them available for our
 ;; shadow-defun, and rebind defun to be our shadow defun. We only do this if we are
 ;; loading an org file. Note the declaration of named-code-blocks as special. We
 ;; shouldn't need that, as it is defined using defvar however, SBCL does something
-;; funny and will consider it lexical unless we explicitly say not to.
-
-;; (:@+ |defvars|
-;;   (defvar imdone nil))
-
+;; funny and will consider it lexical unless we explicitly say it's special.
+;; These are written as we want to defer the changes until the rest of this
+;; file has been read.
 
 ;; (:@+ |hook load|
 ;;   (without-cl-locked
 ;;       (defun load (path &rest args)
-;; 	(if '(and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-;; 		    :test 'equalp))
+;; 	(if (in-a-context-where-we-should-use-expand-web-form)
 ;; 	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
 ;; 	      (let ((named-code-blocks (and (probe-file path) (gather-code-chunks path ))))
 ;; 		(declare (special named-code-blocks))
@@ -842,8 +870,7 @@ See the source for full usage and documentation|")))
 ;; (:@+ |hook compile-file|
 ;;   (without-cl-locked
 ;;       (defun compile-file (path &rest args)
-;; 	(if (and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-;; 		    :test 'equalp))
+;; 	(if (in-a-context-where-we-should-use-expand-web-form)
 ;; 	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
 ;; 	      (let ((named-code-blocks (gather-code-chunks path )))
 ;; 		(declare (special named-code-blocks))
@@ -851,83 +878,69 @@ See the source for full usage and documentation|")))
 ;; 		  (apply *save-compile-file* path args))))
 ;; 	    (apply *save-compile-file* path args)))))
 
-;; All of the patching needs to be done inside an eval-when.
+;; *** Installing the hooks
+;; All of the patching needs to be done inside an eval-when. It's in a code chunk
+;; so it can easily placed at the end of the file.
 
-  ;; Using |hook abcl's compile-defun|
-(progn #+ABCL
-  (defun jvm::compile-defun (&rest args)
-    (if '(and imdone (or *load-truename*  *compile-file-pathname*))
-	(apply *save-compile-defun*
-	       (first args) (expand-web-form (second args))
-	       (cddr args))
-	(apply *save-compile-defun* args)
-	))) ; any time ok.
-#+(or abcl sbcl ccl cmu ecl )
-(eval-when (:load-toplevel :execute)
-  ;; Using |let common-lisp package be modified|
-(defmacro without-cl-locked (&body body)
-  `(#-(or SBCL CCL CMU ECL ALLEGRO) progn
-     #+SBCL sb-ext::without-package-locks
-     #+CCL let #+CCL ((CCL:*WARN-IF-REDEFINE-KERNEL* nil))
-     #+CMU extensions::without-package-locks
-     #+ECL let #+ECL ((SI:*IGNORE-PACKAGE-LOCKS* t))
-     #+ALLEGRO  EXCL:WITHOUT-PACKAGE-LOCKS
-     ,@body))
-  ;; Using |letf dynamically binds any place|
-(defmacro letf-without-cl-lockeds (bindings &body body)
-    (if (null bindings)
-      `(progn ,@body)
-      (let ((save (gensym)))
-	`(let ((,save ,(caar bindings)))
-	   (letf-without-cl-lockeds ,(cdr bindings)
-	     (unwind-protect (progn
-			       (without-cl-locked
-				   (setf ,(caar bindings) ,(second (car bindings))))
-			       ,@body)
-	       (without-cl-locked
-		   (setf ,(caar bindings) ,save))))))))
-  ;; Using |defun for use in org files|
-(defmacro shadow-defun (name args &body body &environment env)
-    ;; SBCL needs this decl - does something that makes it
-    ;; thing named-code-blocks is lexical
-    (declare (special named-code-blocks))
-    (funcall *save-defun*
-	     `(defun ,name ,(expand-web-form args)
-		,@(expand-web-form body)) env))
-  ;; Using |hook load|
-(without-cl-locked
-      (defun load (path &rest args)
-	(if '(and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-		    :test 'equalp))
-	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
-	      (let ((named-code-blocks (and (probe-file path) (gather-code-chunks path ))))
-		(declare (special named-code-blocks))
-		(with-literate-syntax
-		  (apply *save-load* path args))))
-	    (apply *save-load* path args))))
-  ;; Using |hook compile-file|
-(without-cl-locked
-      (defun compile-file (path &rest args)
-	(if (and imdone '(member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
-		    :test 'equalp))
-	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
-	      (let ((named-code-blocks (gather-code-chunks path )))
-		(declare (special named-code-blocks))
-		(with-literate-syntax
-		  (apply *save-compile-file* path args))))
-	    (apply *save-compile-file* path args)))))
+;; (:@+ |set up hooks|
+;;  (:@ |hook abcl's compile-defun|) 
+;;  #-(or allegro lispworks)
+;;  (eval-when (:load-toplevel :execute)
+;;    (:@ |defun for use in org files|)
+;;    (:@ |hook load|)
+;;    (:@ |hook compile-file|))
+;; )
 
-#-(or abcl sbcl ccl cmu ecl)
-(warn "Didn't know how to patch a common lisp defined defun or defmacro, so load and compile of org files won't work. Use the tangled file")
+;; Warn if we're not one of the lisps we've handled.
+;; (warn "Didn't know how to patch a common lisp defined defun or defmacro, so load and compile of org files won't work. Use the tangled file")
+;; For for testing we want to be able to unhook and undefine everything everything.
 
-;; We need a function, for testing, that unhooks everything
-
-(defun unhook ()
+(defun erase-lilith ()
   (without-cl-locked
     (setf (symbol-function 'load) *save-load*)
     (setf (symbol-function 'compile-file) *save-compile-file*)
     #+ABCL
-    (setf (symbol-function 'jvm::compile-defun) *save-compile-defun*))) 
+    (setf (symbol-function 'jvm::compile-defun) *save-compile-defun*))
+  (let ((lilith-package (find-package 'lp)))
+    (do-symbols (s 'lp)
+      (when (eq (symbol-package s) lilith-package)
+	(when (boundp s) (makunbound s))
+	(when (fboundp s) (makunbound s))))))
+
+
+;; <<lispworks implementation>>
+;; *** Lispworks implementation.
+;; LispWorks can add an
+;; [[http://www.lispworks.com/documentation/lw70/LW/html/lw-682.htm][advice]] to a
+;; function to change its default behavior, we can take advantage of this facility
+;; to hook load and compile-file. As I don't know whether one can advise a defmacro
+;; form, we fall back to the general method.
+;; Please note that this hasn't been tested, and that I am uncertain whether
+;; lispworks needs to hook something in the compiler or whether it expands defun
+;; during compilation.
+
+#+lispworks
+(progn
+  (lw:defadvice (cl:load literate-load :around) (&rest args)
+    (literate-lisp:with-literate-syntax
+      (if (in-a-context-where-we-should-use-expand-web-form)
+	  (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	    (let ((named-code-blocks (and (probe-file path) (gather-code-chunks path ))))
+	      (declare (special named-code-blocks))
+	      (with-literate-syntax
+		(apply #'lw:call-next-advice args))))
+	  (apply #'lw:call-next-advice args))))
+
+  (lw:defadvice (cl:compile-file :around) (&rest args)
+    (literate-lisp:with-literate-syntax
+      (if (in-a-context-where-we-should-use-expand-web-form)
+	  (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	    (let ((named-code-blocks (and (probe-file path) (gather-code-chunks path ))))
+	      (declare (special named-code-blocks))
+	      (with-literate-syntax
+		(apply #'lw:call-next-advice args))))
+	  (apply #'lw:call-next-advice args))))
+  )
 
 ;; ** ASDF support for org file as source code
 ;; Define a new source file class for org files. The class name needs to be in the ASDF package.
@@ -1006,67 +1019,71 @@ See the source for full usage and documentation|")))
 ;;   (5am:run! 'literate-lisp-suite))
 ;; ** run all tests in demo project
 ;; To run all tests in demo project ~literate-demo~, please load it by yourself.
+;; * Bugs
+;; - Doesn't work in Allegro until we can hook compile-defun.
+;; * Ideas and Plans
+;; - A way to indicate that some portion of text should be used as a docstring. 
+;; - Better formatting/linking of code chunks.
+;; - Fix indentation for tangled code chunks
+;; - Fix eval and code navigation in emacs within org files. 
+;; - Quick preview of code block with all substitutions
+;; - Redirect pieces of the file to different tanged files, e.g. to embed and export asd, test files.
+;; - Add xref links in exports 
+;; - C-c C-c eval taking into account code chunks. What should happen when we eval a code chunk? Eval any users?
+;; - A way to have long texts without having to escape for lisp. Tried (:@. but it's a pain.
+;; ** Final setup   
+
+;; Using |set read table dispatch functions|
+(set-dispatch-macro-character #\# #\space #'sharp-space *org-readtable*)
+  (set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*)
+;; Using |set up hooks|
+;; Using |hook abcl's compile-defun|
+(progn #+ABCL
+  (defun jvm::compile-defun (&rest args)
+    (if (in-a-context-where-we-should-use-expand-web-form)
+	(apply *save-compile-defun*
+	       (first args) (expand-web-form (second args))
+	       (cddr args))
+	(apply *save-compile-defun* args)
+	))) 
+ #-(or allegro lispworks)
+ (eval-when (:load-toplevel :execute)
+   ;; Using |defun for use in org files|
+(defmacro shadow-defun (name args &body body &environment env)
+    ;; SBCL needs this decl - does something that makes it
+    ;; thing named-code-blocks is lexical
+    (declare (special named-code-blocks))
+    (funcall *save-defun*
+	     `(defun ,name ,(expand-web-form args)
+		,@(expand-web-form body)) env))
+   ;; Using |hook load|
+(without-cl-locked
+      (defun load (path &rest args)
+	(if (in-a-context-where-we-should-use-expand-web-form)
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (and (probe-file path) (gather-code-chunks path ))))
+		(declare (special named-code-blocks))
+		(with-literate-syntax
+		  (apply *save-load* path args))))
+	    (apply *save-load* path args))))
+   ;; Using |hook compile-file|
+(without-cl-locked
+      (defun compile-file (path &rest args)
+	(if (in-a-context-where-we-should-use-expand-web-form)
+	    (letf-without-cl-lockeds (((macro-function 'defun) (macro-function 'shadow-defun)))
+	      (let ((named-code-blocks (gather-code-chunks path )))
+		(declare (special named-code-blocks))
+		(with-literate-syntax
+		  (apply *save-compile-file* path args))))
+	    (apply *save-compile-file* path args)))))
+
+
 ;; * References
+;; - [[https://github.com/jingtaozf/literate-lisp][Literate Lisp]] by Jingtao Xu, the original project from which Lilith was forked.
 ;; - [[http://www.literateprogramming.com/knuthweb.pdf][Literate. Programming.]] by [[https://www-cs-faculty.stanford.edu/~knuth/lp.html][Donald E. Knuth]]
 ;; - [[http://www.literateprogramming.com/][Literate Programming]]  a site of literate programming
 ;; - [[https://www.youtube.com/watch?v=Av0PQDVTP4A][Literate Programming in the Large]] a talk video from Timothy Daly,one of the original authors of [[https://en.wikipedia.org/wiki/Axiom_(computer_algebra_system)][Axiom]].
 ;; - [[https://orgmode.org/worg/org-contrib/babel/intro.html#literate-programming][literate programming in org babel]]
 ;; - [[https://github.com/limist/literate-programming-examples][A collection of literate programming examples using Emacs Org mode]]
 ;; - [[https://github.com/xtaniguchimasaya/papyrus][papyrus]] A Common Lisp Literate Programming Tool in markdown file
-;; * New sections from alanr
-;; ** Bootstrap test
-;; Tangle the org file, load the tangled file, tangle the org file again, make sure
-;; they are same.
-
-(defun files-same? (file1 file2)
-  (equal "" (with-output-to-string (s)
-  (uiop/run-program:run-program
-  (format nil "diff ~a ~a" (truename file1) (truename file2))
-  :output s))))
-
-;; Test that we can re-generate literate-lisp
-;; (:@+ |tests|
-;;   (5am:test tangle-ok?
-;; 	    (5am:is 
-;; 	     (let ((org-path (asdf/system::system-relative-pathname 'literate-lisp "literate-lisp.org")))
-;; 	       (pushnew :literate-test *features*)
-;; 	       (let ((file1 (merge-pathnames "ll-1.lisp" uiop/stream:*temporary-directory*))
-;; 		     (file2 (merge-pathnames "ll-2.lisp" uiop/stream:*temporary-directory*)))
-;; 	       (tangle-org-file org-path  :output-file file1 :keep-test-codes t)
-;; 	       (unhook)
-;; 	       (rename-package "LITERATE-LISP" (gensym))
-;; 	       (load file1) 
-;; 	       (funcall (intern "TANGLE-ORG-FILE" 'lp)  org-path  :output-file file2 :keep-test-codes t)
-;; 	       (files-same? file1 file2))))))
-;; ** Bugs
-;; In
-;; ** TODO
-;; - A way to indicate that some portion of text should be used as a docstring.
-;; - Better formatting/linking of code chunks.
-;; - Fix indentation for tangled code chunks
-;; - Fix code navigation within org files. 
-;; - Quick preview of code block with all substitutions
-;; - Redirect pieces of the file to different tanged files, e.g. to embed and export asd, test files.
-;; - Add xref links in exports 
-;; - C-c C-c eval taking into account code chunks. What should happen when we eval a code chunk? Eval any users?
-;; - Figure out why poly-org-mode is flakey
-;; ** Why we need to patch defun (and maybe others) AND have the :@ macro.
-;; :@ returns a progn. there's no where to 'splice' if you are at the top level.
-;; Because it's a progn, if we only had :@ we wouldn't be able to use it in lots of
-;; places of special forms like the bindings in let, or arguments to a function.
-
-;; Using |set read table dispatch functions|
-(set-dispatch-macro-character #\# #\space #'sharp-space *org-readtable*)
-  (set-dispatch-macro-character #\# #\+ #'sharp-plus *org-readtable*)
-(setq imdone t)
-
-;; ** Broken
-;; Allegro until we can hook compile-defun 
-;; ** Working
-;; ABCL-bin
-;; CMU-bin 
-;; CCL-bin
-;; SBCL
-;; SBCL-BIN
-;; ECL
 
