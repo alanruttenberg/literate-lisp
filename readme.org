@@ -23,10 +23,10 @@ You can create source one source file containing both documentation and source a
 Lilith's implementation is in [[./lilith.org]]
 
 This library contains the following files:
-- [[./Lilith.org]] \\
+- [[./lilith.org]] \\
   The implementation and documentation.
-- [[./Lilith.lisp]] \\
-  Lisp source generated from [[./literate-lisp..org]], to bootstrap.
+- [[./lilith.lisp]] \\
+  Lisp source generated from [[./lilith.org]], to bootstrap.
 - [[./readme.org]] \\
   This file 
 - [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] \\
@@ -35,7 +35,7 @@ This library contains the following files:
   The ASDF definition for the Lilith project.
 - [[./lilith-demo.asd]] \\
   The ASDF definition for a system that uses this readme file as source code.
-
+  
 * Tutorial
 ** Install polymode in Emacs
 The elisp library [[https://polymode.github.io/][polymode]] enhances org mode by arranging that as
