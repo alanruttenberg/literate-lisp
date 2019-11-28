@@ -10,7 +10,7 @@
   - [[#using-lilith][Using Lilith]]
   - [[#a-worked-example-this-file][A worked example: This file.]]
   - [[#tests][Tests]]
-  - [[#notes][Notes**]]
+  - [[#notes][Notes]]
 
 * Introduction
 [[https://github.com/jingtaozf/literate-lisp][Lilith]] is inspired by [[https://github.com/jingtaozf/literate-lisp][Jingtao Xu's Literate Lisp project]], and started as a fork of that project. 
@@ -28,7 +28,7 @@ This library contains the following files:
 - [[./Lilith.lisp]] \\
   Lisp source generated from [[./literate-lisp..org]], to bootstrap.
 - [[./readme.org]] \\
-  This file contains introduction to how to do literate programming in Lilith.
+  This file 
 - [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] \\
   The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library - /not yet active/
 - [[./lilith.asd]] \\
@@ -183,7 +183,7 @@ This function is the entry point to run all tests and return true if all test ca
  (5am:run! 'lilith-demo-suite)
 #+END_SRC
 
-** Notes**
+** Notes
 *** Debugging in LispWorks
 You can debug in the LispWorks IDE by adding the following to your  ~.lispworks~ file,
 which lets the Lispworks Editor know that the org file should be viewed as lisp file.
