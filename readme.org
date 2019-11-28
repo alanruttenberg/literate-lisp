@@ -3,117 +3,133 @@
 #+PROPERTY: literate-lang lisp
 #+PROPERTY: literate-load yes
 
-* Important Note
-This is a fork of the excellent work by @jingtaozf. It is currently a WIP - for a stable version see
-https://github.com/jingtaozf/literate-lisp .  Because work is in progress, this documentation will not be completely
-accurate until I've updated it. In addition tangle.org, ostensibly from which tangle.lisp is generated, is 
-out of date. tangle.lisp is the working source. I expect to update the org files in the near future.
-
-
 * Table of Contents                                            :TOC:noexport:
 - [[#introduction][Introduction]]
 - [[#tutorial][Tutorial]]
-  - [[#install-polymode-in-emacs][install polymode in Emacs]]
-  - [[#how-to-insert-code-block-quickly][how to insert code block quickly]]
-  - [[#a-new-code-block-header-argument-load][a new code block header argument ~load~]]
-  - [[#a-demo-lisp-package][A demo lisp package]]
-    - [[#prepare-the-asd-definition-file][Prepare the ASD definition file]]
-    - [[#package-definition][package definition]]
-    - [[#a-demo-function-to-a-recursive-assoc-implementation][a demo function to a recursive assoc implementation]]
-  - [[#web-syntax][WEB syntax]]
-  - [[#how-to-debug-org-file-in-lispworks-ide][How to debug org file in LispWorks IDE]]
-  - [[#test-cases-for-this-demo-project][Test cases for this demo project]]
-    - [[#preparation][Preparation]]
-    - [[#tests-for-recursive-assoc][tests for ~recursive-assoc~]]
-    - [[#run-all-tests-in-this-library][run all tests in this library]]
+  - [[#install-polymode-in-emacs][Install polymode in Emacs]]
+  - [[#using-lilith][Using Lilith]]
+  - [[#a-worked-example-this-file][A worked example: This file.]]
+  - [[#tests][Tests]]
+  - [[#notes][Notes**]]
 
 * Introduction
-[[https://github.com/jingtaozf/literate-lisp][literate-lisp]] provides an easy way to use [[http://www.literateprogramming.com/][literal programming]] in Common Lisp language.
-It extends the Common Lisp [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]]
-so a Common Lisp vendor can read org files as Common Lisp source files.
+[[https://github.com/jingtaozf/literate-lisp][Lilith]] is inspired by [[https://github.com/jingtaozf/literate-lisp][Jingtao Xu's Literate Lisp project]], and started as a fork of that project. 
+This readme was substantially authored by Jingtao Xu. Note that Lilith doesn't use the same syntax as Literate Lisp.
 
-By using this package([[https://github.com/jingtaozf/literate-lisp][literate-lisp]]), Emacs [[https://orgmode.org/][org mode]] and elisp library [[https://polymode.github.io/][polymode]],
-literate programming can be very easy in one org file containing both documentation and source codes,
-and this org file can interact well with [[https://common-lisp.net/project/slime/][SLIME]].
+Lilith provides an easy way to use [[http://www.literateprogramming.com/][literal programming]] in Common Lisp language by extending the Common Lisp [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]], 
+and lisp's load, compile-file, and defun,  so that a Common Lisp implementation can read org files as Common Lisp source files. By using Lilth, Emacs [[https://orgmode.org/][org mode]] and elisp library [[https://polymode.github.io/][polymode]],
+You can create source one source file containing both documentation and source and which interacts well with [[https://common-lisp.net/project/slime/][SLIME]].
 
-The implementation detail of [[https://github.com/jingtaozf/literate-lisp][literate-lisp]] is in file [[./tangle.org]] ([[./tangle.pdf][pdf version]]).
+Lilith's implementation is in [[./lilith.org]]
 
 This library contains the following files:
-- [[./tangle.org]] \\
-  The implementation and documentation of literate lisp reader.
-- [[./tangle.lisp]] \\
-  The tangled codes of literate lisp reader, generated from [[./tangle.org]]
-- [[./tangle.pdf]] \\
-  The weaved documentation, generated from [[./tangle.org]] by org mode's [[https://orgmode.org/manual/Triggering-publication.html#Triggering-publication][publish feature]].
+- [[./Lilith.org]] \\
+  The implementation and documentation.
+- [[./Lilith.lisp]] \\
+  Lisp source generated from [[./literate-lisp..org]], to bootstrap.
 - [[./readme.org]] \\
-  This file contains introduction and demo codes for how to do literate lisp in an org file.
+  This file contains introduction to how to do literate programming in Lilith.
 - [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] \\
-  The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library.
-- [[./literate-lisp.asd]] \\
-  The ASDF definition for literate-lisp project.
-- [[./literate-demo.asd]] \\
-  The ASDF definition for literate demo project.
+  The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library - /not yet active/
+- [[./lilith.asd]] \\
+  The ASDF definition for the Lilith project.
+- [[./lilith-demo.asd]] \\
+  The ASDF definition for a system that uses this readme file as source code.
 
 * Tutorial
-** install polymode in Emacs
-It's better to edit the org file with [[https://polymode.github.io/][polymode]],which will make code block use its native file mode.
-The following elisp scripts in .emacs will install it.
+** Install polymode in Emacs
+The elisp library [[https://polymode.github.io/][polymode]] enhances org mode by arranging that as
+you move into a source code block, slime-mode becomes active.
+
+Include the following in your .emacs to install it.
 #+BEGIN_SRC elisp
-(use-package poly-org
-    :ensure t)
+(use-package poly-org :ensure t)
 #+END_SRC
-** how to insert code block quickly
-Please have a look of the section [[https://github.com/jingtaozf/literate-elisp/blob/master/literate-elisp.org#how-to-insert-code-block-in-org-file][How to insert code block in org file]] in library [[https://github.com/jingtaozf/literate-elisp][literate-elisp]].
-** a new code block header argument ~load~
-Please have a look of the section [[./tangle.org#new-defined-header-argument-load][new defined header argument load]] in [[./tangle.org]].
-** A demo lisp package
-*** Prepare the ASD definition file
+** Using Lilith
+Please review [[./lilith.org#Terminology][Terminology]].
+*** Syntax
+Lilith authoring uses two syntactic elements: :@ and :@+. :@+ is used to define or add to a code chunk named. For example, 
+#+begin_src lisp load no
+(:@+ |some bindings| (a 10) (b 20))
+#+end_src
+:@ is used to insert a chunk so-defined.
+#+begin_src lisp load no
+(defun foo ()
+  (let ((:@ |some bindings|))
+     (+ a b)))
+#+end_src
+By the time it gets to lisp, the function is transformed to 
+#+begin_src lisp load no
+(defun foo ()
+  (let (;; Using |some bindings|
+	(a 10) (b 20))
+     (+ a b)))
+#+end_src
+:@ may be also used outside defun. In that case the chunk is wrapped in a progn.
 
-We use the original ASD definition file, and extend the ASDF syntax(The documentation of extended ASDF syntax can be found in [[https://github.com/jingtaozf/literate-lisp/blob/master/tangle.org#make-asdf-handle-org-file-correctly][tangle.org]]).
+*** A new code block header argument in org-mode: ~load~
+Lilith adds a new header for lisp source blocks in org-mode. For example, writing
+#+begin_example
+#+begin_src lisp load no
+(never-evalute-this!)
+#+end_src
+#+end_example
+indicates that the contents of the source block will not be read when loading the org file.
+In particular, using "load test" indicates that the source block will not be read unless either
+the keyword :test or :lilith-test is an element of ~*features*~.
+For more details see [[./lilith.org#Let-a-header-argument-determine-whether-to-load][Let a header argument determine whether to load]].
+*** Tangling a file
+The function ~tangle-org-file~ transforms the org-mode source to lisp. E.g.
+#+begin_src lisp load no
+(tangle-org-file "readme.org")      
+#+end_src
+By default the non-lisp text is included as comments in the resulting source. You can prevent
+that by passing ~:keep-org-text nil~ to the function. For more details see [[./lilith.org/Tangling-the-org-file][Tangling the org file]].
+You can have tangle include ~load test~ lisp blocks with ~:keep-tests t~.
+    
+** A worked example: This file.
+*** Preparing an ASDF definition file
+We extend ASDF to add an :org component. See [[./lilith.org#ASDF-support-for-org-file-as-source-code][ASDF support for org file as source code]].
 
-In a short word,we should load ~literate-lisp~ by ASDF keyword ~:defsystem-depends-on~ and
-declare the org source file with new ASDF keyword ~:org~.
+Lilith itself can be loaded as a precondition for a system using ~:defsystem-depends-on~. Then, instead of using ~:file~ in your sysdef, you use ~:org~ for org file source.
 
-Now let's define the ASDF system file [[./literate-demo.asd]] for this demo package
+First define an ASDF system file [[./lilith-demo.asd]] which loads this [[./readme.org]] directly as a lisp source file.
 #+BEGIN_SRC elisp :load no
-(asdf:defsystem literate-demo
-  :author "Xu Jingtao <jingtaozf@gmail.com>"
-  :version "0.1"
-  :licence "MIT"
+(asdf:defsystem lilith-demo
+  :author "Alan Ruttenberg <alanruttenberg@gmail.com> and Xu Jingtao <jingtaozf@gmail.com>"
+  :version "1"
+  :licence "MIT/CC-BY"
   :serial t
-  :description "an demo project of literate-lisp"
-  :defsystem-depends-on ("literate-lisp")
+  :description "lilith demo"
+  :defsystem-depends-on ("lilith")
   :components ((:module :demo :pathname "./"
                         :components ((:org "readme"))))
-  :properties ((version "0.1")))
+  )
 #+END_SRC
-Which will load this [[./readme.org]] directly as a lisp source file.
+This sysdef is in the file [[./lilith-demo.asd]].
 
-The whole content of ASDF definition file is in [[./literate-demo.asd]].
-
-*** package definition
-
-Firstly we define a new package for this demo project and switch to it.
+*** Package
+Define a new package for this demo project and switch to it.
 #+BEGIN_SRC lisp
 (in-package :common-lisp-user)
-(defpackage :literate-demo (:use :cl))
-(in-package :literate-demo)
+(defpackage :lilith-demo (:use :cl))
+(in-package :lilith-demo)
 #+END_SRC
-*** a demo function to a recursive assoc implementation
-As a demo project, we just show a demo function ~recursive-assoc~ here.
+*** For demonstration, a recursive assoc implementation
+For the demo, we'll define a function ~recursive-assoc~.
 
-The function [[http://clhs.lisp.se/Body/f_assocc.htm][assoc]] only find first level item from an [[http://clhs.lisp.se/Body/26_glo_a.htm#association_list][association list]]. When I want to
-find item from an association list contains a lot of other association list with very deep level, I
-have to write codes like this which is too long.
+The function [[http://clhs.lisp.se/Body/f_assocc.htm][assoc]] find an item from a linear [[http://clhs.lisp.se/Body/26_glo_a.htm#association_list][association list]]. Suppose I want to
+find an item from an something like an association list but which contains nested association lists.
+Using assoc I would have to write, e.g.,
 #+BEGIN_SRC lisp :load test
 (cdr (assoc :b (cdr (assoc :a '((:a . ((:b . c))))))))
 #+END_SRC
-To simplify the expression, a macro ~recursive-assoc~ to simply to the following form provides:
+Let's define a macro ~recursive-assoc~ as a replacement for assoc, to be used like this:
 #+BEGIN_SRC lisp :load no
 (recursive-assoc '((:a . ((:b . c)))) :a :b)
 #+END_SRC
 
-A macro function to expand lisp expressions recursively provides firstly.
+First, define a macro function to expand lisp expressions recursively.
 #+BEGIN_SRC lisp
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun expand-recursive-assoc (alist recursive-properties)
@@ -123,63 +139,62 @@ A macro function to expand lisp expressions recursively provides firstly.
       `(cdr (assoc ,(car recursive-properties) ,alist)))))
 #+END_SRC
 
-Then the implementation macro is simple(test is here: ref:test-recursive-assoc)
+Now we implement ~recursive-assoc~ as below. A test is in [[test recursive assoc]].
 #+BEGIN_SRC lisp
 (defmacro recursive-assoc (alist &rest recursive-properties)
   (when recursive-properties
     (expand-recursive-assoc alist recursive-properties)))
 #+END_SRC
 
-For example, you can use it like this,which get ~:b~ part of the sub association list
-which is ~:a~ part of the original list.
+Here's an example, which gets ~:b~ association of a nested association list and 
+checks it. We define this as a code chunk (for demonstration purposes) to be used 
+in [[test recursive assoc]].
+
 #+BEGIN_SRC lisp :load test
-(equal 'c (recursive-assoc '((:a . ((:b . c)))) :a :b))
-#+END_SRC
-** WEB syntax
-There is only a [[./tangle.org#WEB-Specification][simple specification]] and a [[./tangle.org#test-for-web-syntax][simple case]] for it.
-
-~This part is still in the experimental stage~.
-
-If you want to highlight WEB syntax in Emacs lisp mode, please add the following code into your Emacs configuration file:
-#+BEGIN_SRC elisp :load no
-(font-lock-add-keywords
- 'lisp-mode
- `(("\\(defun-literate\\|@=\\|:@@\\||:@\\)"
-    . font-lock-keyword-face)))
+(:@+ |test|
+(5am:test recursive-assoc
+  (5am:is (equal 'c (recursive-assoc '((:a . ((:b . c)))) :a :b)))))
 #+END_SRC
 
-** How to debug org file in LispWorks IDE
-You have to add the following codes in your ~.lispworks~ to enable the debug facility in Lispworks Editor.
+** Tests
+*** Using FiveAM
+
+The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used for tests.
+
+#+BEGIN_SRC lisp :load test
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-package :fiveam)
+    #+quicklisp (ql:quickload :fiveam)
+    #-quicklisp (asdf:load-system :fiveam)))
+(5am:def-suite lilith-demo-suite :description "The test suite of lilith-demo.")
+(5am:in-suite lilith-demo-suite)
+#+END_SRC
+
+*** The test, demonstrating use of a code chunk
+<<test recursive assoc>>
+#+BEGIN_SRC lisp :load test
+(:@ |test|)
+
+#+END_SRC
+
+*** run all tests in this library
+This function is the entry point to run all tests and return true if all test cases pass.
+#+BEGIN_SRC lisp :load test
+ (5am:run! 'lilith-demo-suite)
+#+END_SRC
+
+** Notes**
+*** Debugging in LispWorks
+You can debug in the LispWorks IDE by adding the following to your  ~.lispworks~ file,
+which lets the Lispworks Editor know that the org file should be viewed as lisp file.
 #+BEGIN_SRC lisp :load no
 (defun check-org-mode (buffer truename)
   (when (and truename (equal (pathname-type truename) "org"))
     (setf (editor:buffer-major-mode buffer) "Lisp")))
 (editor:add-global-hook editor::read-file-hook 'check-org-mode)
 #+END_SRC
-Thanks for Martin Simmons in [[http://www.lispworks.com/][LispWorks]] to support the above configuration codes.
-** Test cases for this demo project
-*** Preparation
-Now it's time to validate some functions.
-The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used to test.
-#+BEGIN_SRC lisp :load test
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (find-package :fiveam)
-    #+quicklisp (ql:quickload :fiveam)
-    #-quicklisp (asdf:load-system :fiveam)))
-(5am:def-suite literate-demo-suite :description "The test suite of literate-demo.")
-(5am:in-suite literate-demo-suite)
-#+END_SRC
-*** tests for ~recursive-assoc~
-label:test-recursive-assoc
-#+BEGIN_SRC lisp :load test
-(5am:test recursive-assoc
-  (5am:is (equal 'c (recursive-assoc '((:a . ((:b . c)))) :a :b))))
-#+END_SRC
-*** run all tests in this library
-This function is the entry point to run all tests and return true if all test cases pass.
-#+BEGIN_SRC lisp :load test
-(defun run-test ()
-  (5am:run! 'literate-demo-suite))
-#+END_SRC
-Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] will load config file [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] to run these tests automatically
-every time there is a new git change.
+Thanks to Martin Simmons at [[http://www.lispworks.com/][LispWorks]] for this.
+
+*** Testing lilith (coming soon)
+The [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] service loads a configuration file [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] that runs the lilith tests
+when a commit is made.

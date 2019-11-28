@@ -6,3 +6,7 @@ auto/
 *.tex.*
 *.fasl
 *.abcl
+*.fas
+*.dx64fsl
+*.fasl
+*.sse2f
