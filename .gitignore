@@ -10,3 +10,4 @@ auto/
 *.dx64fsl
 *.fasl
 *.sse2f
+*.html
