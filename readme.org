@@ -70,9 +70,9 @@ By the time it gets to lisp, the function is transformed to
 *** A new code block header argument in org-mode: ~load~
 Lilith adds a new header for lisp source blocks in org-mode. For example, writing
 #+begin_example
-#+begin_src lisp load no
+,#+begin_src lisp load no
 (never-evalute-this!)
-#+end_src
+,#+end_src
 #+end_example
 indicates that the contents of the source block will not be read when loading the org file.
 In particular, using "load test" indicates that the source block will not be read unless either
