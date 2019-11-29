@@ -48,7 +48,9 @@ Include the following in your .emacs to install it.
 ** Using Lilith
 Please review [[./lilith.org#Terminology][Terminology]].
 *** Syntax
-Lilith authoring uses two syntactic elements: :@ and :@+. :@+ is used to define or add to a code chunk named. For example, 
+Lilith authoring uses two syntactic elements in lisp: :@ marks where a code chunk should be substituted and :@+ is used to
+define or add to a code chunk named. For example,
+
 #+begin_src lisp load no
 (:@+ |some bindings| (a 10) (b 20))
 #+end_src
@@ -66,6 +68,29 @@ By the time it gets to lisp, the function is transformed to
      (+ a b)))
 #+end_src
 :@ may be also used outside defun. In that case the chunk is wrapped in a progn.
+
+Lilith also provides a mechanism for putting text in a freetext block, so you 
+don't have to worry about quoting *"* or making code ugly with multi-line text strings.
+Here's an example of how to do it.
+
+#+begin_example
+,#+begin_verse lisp 
+:@+ |example text chunk|
+This is some text
+,#+end_verse
+#+end_example
+
+With this, 
+#+begin_src lisp :load no
+(print (:@ |example text chunk|))
+#+end_src
+is transfomed to
+#+begin_src lisp :load no
+(print "This is some text")
+#+end_src
+
+Text blocks can also be used a list of lines or be read from a stream. For details see 
+[[./lilith.html#sec-2-3][Working with text chunks]]
 
 *** A new code block header argument in org-mode: ~load~
 Lilith adds a new header for lisp source blocks in org-mode. For example, writing
