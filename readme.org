@@ -16,7 +16,7 @@
 [[https://github.com/jingtaozf/literate-lisp][Lilith]] is inspired by [[https://github.com/jingtaozf/literate-lisp][Jingtao Xu's Literate Lisp project]], and started as a fork of that project. 
 This readme was substantially authored by Jingtao Xu. Note that Lilith doesn't use the same syntax as Literate Lisp.
 
-Lilith provides an easy way to use [[http://www.literateprogramming.com/][literal programming]] in Common Lisp language by extending the Common Lisp [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]], 
+Lilith provides an easy way to use [[http://www.literateprogramming.com/][literate programming]] in Common Lisp language by extending the Common Lisp [[https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node187.html][reader syntax]], 
 and lisp's load, compile-file, and defun,  so that a Common Lisp implementation can read org files as Common Lisp source files. By using Lilth, Emacs [[https://orgmode.org/][org mode]] and elisp library [[https://polymode.github.io/][polymode]],
 You can create source one source file containing both documentation and source and which interacts well with [[https://common-lisp.net/project/slime/][SLIME]].
 
