@@ -20,21 +20,14 @@ Lilith provides an easy way to use [[http://www.literateprogramming.com/][litera
 and lisp's load, compile-file, and defun,  so that a Common Lisp implementation can read org files as Common Lisp source files. By using Lilth, Emacs [[https://orgmode.org/][org mode]] and elisp library [[https://polymode.github.io/][polymode]],
 You can create source one source file containing both documentation and source and which interacts well with [[https://common-lisp.net/project/slime/][SLIME]].
 
-Lilith's implementation is in [[./lilith.org]]
-
 This library contains the following files:
-- [[./lilith.org]] \\
-  The implementation and documentation.
-- [[./lilith.lisp]] \\
-  Lisp source generated from [[./lilith.org]], to bootstrap.
-- [[./readme.org]] \\
-  This file 
-- [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] \\
-  The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library - /not yet active/
-- [[./lilith.asd]] \\
-  The ASDF definition for the Lilith project.
-- [[./lilith-demo.asd]] \\
-  The ASDF definition for a system that uses this readme file as source code.
+| [[./lilith.org][lilith.org]]                 | The implementation and documentation.                                                      |
+| [[./lilith.lisp][lilith.lisp]]                | Lisp source generated from [[./lilith.org][lilith.org]], to bootstrap.                         |
+| [[./readme.org][readme.org]]                 | This file                                                                                  |
+| [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] | The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library - /not yet active/ |
+| [[./lilith.asd][lilith.asd]]                 | The ASDF definition for the Lilith project                                                 |
+| [[./lilith-demo.asd][lilith-demo.asd]]            | The ASDF definition for a system that uses this readme file as source code.                |
+
   
 * Tutorial
 ** Install polymode in Emacs
