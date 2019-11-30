@@ -22,11 +22,12 @@ You can create source one source file containing both documentation and source a
 
 This library contains the following files:
 | [[./lilith.org][lilith.org]]                 | The implementation and documentation.                                                      |
-| [[./lilith.lisp][lilith.lisp]]                | Lisp source generated from [[./lilith.org][lilith.org]], to bootstrap.                         |
+| [[./lilith.lisp][lilith.lisp]]                | Lisp source generated from [[./lilith.org][lilith.org]], to bootstrap.                                       |
 | [[./readme.org][readme.org]]                 | This file                                                                                  |
 | [[./.github/workflows/continuous-integration.yml][continuous-integration.yml]] | The config file used by Web service [[https://github.com/jingtaozf/literate-lisp/actions][github actions]] to test this library - /not yet active/ |
 | [[./lilith.asd][lilith.asd]]                 | The ASDF definition for the Lilith project                                                 |
 | [[./lilith-demo.asd][lilith-demo.asd]]            | The ASDF definition for a system that uses this readme file as source code.                |
+| [[t/rose-tests.sh][ros-tests.sh]]               | A script that runs Roswell to test Lilith.                                                 |
 
   
 * Tutorial
