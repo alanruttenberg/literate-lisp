@@ -34,6 +34,7 @@
   - [[#test-groups][test groups]]
   - [[#run-all-tests-in-this-library][run all tests in this library]]
 - [[#bugs][Bugs]]
+  - [[#org-babel-vs-slime][org-babel vs slime]]
 - [[#ideas-and-plans][Ideas and Plans]]
 - [[#final-setup][Final setup]]
 - [[#references][References]]
@@ -503,7 +504,10 @@ to format the chunk as that.
 	((eq (getf header-arguments :as) :lines)
 	 (list (format nil "'(~{~s~})" lines)))
 	((eq (getf header-arguments :as) :stream)
-	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" lines))
+	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" (mapcar (lambda(e)
+									       (replace-all
+										(replace-all e "\\" (lambda() "\\\\"))
+										"\"" (lambda()"\\\""))) lines)))
 	 )))
 #+end_src
 
@@ -1297,6 +1301,19 @@ For example: (5am:test recursive-assoc (5am:is (:@ |test|))) won't work because 
 is saved by 5am and only evaluated when the test is called. At that point the load
 is finished and so the appropriate context is no longer available
 
+** org-babel vs slime
+There are two different models of interacting with lisp in a src block. When the
+curso is in inside a lisp lock, C-c C-c invokes slime-compile-defun - the
+evaluation side-effects just the lisp. To figure out the package it looks for an
+earlier in-package form.
+
+On the other hand, you can call ~org-babel-execute-src-block~ or ~ ~org-babel-execute-buffer~.
+These don't look at in-package and instead rely on 
+[[https://www.orgmode.org/worg/org-contrib/babel/languages/ob-doc-lisp.html#orgaf59a29][src block headers]].
+Using babel to evaluate, headers determine whether results should become part of the document, using 
+the [[https://orgmode.org/manual/results.html][results header]]. 
+
+The two methods of evaluating should work the same, at least.
 
 * Ideas and Plans
 

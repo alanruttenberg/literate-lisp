@@ -26,6 +26,7 @@
 ;;   - [[#test-groups][test groups]]
 ;;   - [[#run-all-tests-in-this-library][run all tests in this library]]
 ;; - [[#bugs][Bugs]]
+;;   - [[#org-babel-vs-slime][org-babel vs slime]]
 ;; - [[#ideas-and-plans][Ideas and Plans]]
 ;; - [[#final-setup][Final setup]]
 ;; - [[#references][References]]
@@ -130,9 +131,12 @@
 ;; compilers tested thus far, ABCL and Allegro need this treatment. 
 ;; ABCL is implemented, but not yet Allegro.
 ;; ** Working with text chunks
-;; We also want a way to have blocks of text that we can write without
-;; worrying about quoting quotes or having them embedded in functions. To do
-;; that we'll use org's verse blocks to define a text chunk. These look like
+;; We also want a way to have blocks of text that we can write without worrying
+;; about quoting quotes or having them embedded in functions. To do that we'll use
+;; org's verse blocks to define a text chunk. We use verse blocks instead of
+;; verbatim blocks because they preserve line breaks - what you write is what you
+;; see when the org file is rendered.
+;; These look like
 ;; ,#+begin_verse lisp [:name |name|] :as <mode>
 ;; @: |name| (optional)
 ;; First line
@@ -425,7 +429,10 @@
 	((eq (getf header-arguments :as) :lines)
 	 (list (format nil "'(~{~s~})" lines)))
 	((eq (getf header-arguments :as) :stream)
-	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" lines))
+	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" (mapcar (lambda(e)
+									       (replace-all
+										(replace-all e "\\" (lambda() "\\\\"))
+										"\"" (lambda()"\\\""))) lines)))
 	 )))
 	  (when (and *tangling-to-stream* *tangle-keep-org-text*)
 	    (loop for line in (cons first rest-lines)
@@ -442,7 +449,10 @@
 ;; 	((eq (getf header-arguments :as) :lines)
 ;; 	 (list (format nil "'(~{~s~})" lines)))
 ;; 	((eq (getf header-arguments :as) :stream)
-;; 	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" lines))
+;; 	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" (mapcar (lambda(e)
+;; 									       (replace-all
+;; 										(replace-all e "\\" (lambda() "\\\\"))
+;; 										"\"" (lambda()"\\\""))) lines)))
 ;; 	 )))
 
 ;; *** Tests for read-and-collect-text-block
@@ -857,8 +867,9 @@ See the source for full usage and documentation
 ;; evaluation can happen when loading fasls as well. Right now the answer is
 ;; always. Some of the alternative components are in the comments.
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun in-a-context-where-we-should-use-do-chunk-subsitutions () t))
+(defun in-a-context-where-we-should-use-do-chunk-subsitutions () t)
+;; (member (pathname-type path) (load-time-value (list (uiop/lisp-build:compile-file-type) "org"))
+;;		    :test 'equalp))
 
 ;; This macro uses unwind-protect to be able to dynamically bind any lisp /place/.
 
@@ -1102,6 +1113,17 @@ See the source for full usage and documentation
 ;; For example: (5am:test recursive-assoc (5am:is (:@ |test|))) won't work because '(:@ |test|)
 ;; is saved by 5am and only evaluated when the test is called. At that point the load
 ;; is finished and so the appropriate context is no longer available
+;; ** org-babel vs slime
+;; There are two different models of interacting with lisp in a src block. When the
+;; curso is in inside a lisp lock, C-c C-c invokes slime-compile-defun - the
+;; evaluation side-effects just the lisp. To figure out the package it looks for an
+;; earlier in-package form.
+;; On the other hand, you can call ~org-babel-execute-src-block~ or ~ ~org-babel-execute-buffer~.
+;; These don't look at in-package and instead rely on 
+;; [[https://www.orgmode.org/worg/org-contrib/babel/languages/ob-doc-lisp.html#orgaf59a29][src block headers]].
+;; Using babel to evaluate, headers determine whether results should become part of the document, using 
+;; the [[https://orgmode.org/manual/results.html][results header]]. 
+;; The two methods of evaluating should work the same, at least.
 ;; * Ideas and Plans
 ;; - A way to indicate that some portion of text should be used as a docstring. 
 ;; - Better formatting/linking of code chunks.
