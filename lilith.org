@@ -259,25 +259,41 @@ This function evaluates whether or not a code block should be loaded, based on t
 When it sees :test it only returns true if ~:lilith-test~ is in ~*features*~. 
 #+begin_src lisp
 (defun load-p (feature)
-  (case feature
-    ((nil :yes) t)
-    (:no nil)
-    (:test (find :lilith-test *features* :test #'eq))
-    (t (find feature *features* :test #'eq))))
+  (cond ((null feature) t)
+        ((or (eq feature :yes) (equalp feature '("YES"))) t)
+        ((or (eq feature :no) (equalp feature '("NO"))) nil)
+        ((or (eq feature :test) (equalp feature '("TEST")))
+         (find :lilith-test *features* :test #'eq))
+        (t
+         (every (lambda(e) (find (intern (string-upcase (string e)) 'keyword) *features*))
+                feature))))
 #+end_src
 
 Now code to read [[https://orgmode.org/manual/Code-block-specific-header-arguments.html#Code-block-specific-header-arguments][header arguments]] after ~#+begin_src lisp~,
 and convert every key and value to a lisp keyword (see test in [[block header test]]).
 
+Assume the first thing read is a keyword. Then read as normal keeping keywords as keywords and the others as strings.
+
 #+begin_src lisp
 (defun read-org-block-header-arguments (string begin-position-of-header-arguments)
   (with-input-from-string (stream string :start begin-position-of-header-arguments)
     (let ((*readtable* (copy-readtable nil))
-          (*package* #.(find-package :keyword))
           (*read-suppress* nil))
-      (cdr (loop for elem = (read stream nil)
-                     while elem
-                     collect elem)))))
+      (let ((elems (cdr (loop for elem = (read stream nil)
+                             while elem
+                             if (keywordp elem) collect elem else collect (string-downcase (string elem))))))
+        (if (null elems) nil
+            (cons (intern (string (string-upcase (car elems))) 'keyword) (cdr elems)))))))
+#+end_src
+
+The value of a header block will be a list of whatever is read before the next keyword
+#+begin_src lisp
+(defun get-org-block-header-argument (headers keyword default)
+  (loop for top = (pop headers)
+        when (eq top keyword)
+          do (return (subseq headers 0 (position-if 'keywordp headers)))
+        when (null headers)
+          do (return default)))
 #+end_src
 
 *** Sharp space reader
@@ -326,7 +342,7 @@ it either emits the source block as code, or considers it plain org text.
 	     (if (looking-at waiting-for)
 		 (setq waiting-for nil))
 	  until (and (not waiting-for) (looking-at "#+begin_src lisp")
-		     (load-p (getf header-arguments :load :yes)))))
+		     (load-p (get-org-block-header-argument  header-arguments :load :yes)))))
   (when (and *tangling-to-stream* *tangle-keep-org-text*)
     (terpri *tangling-to-stream*))
   (values))
@@ -477,10 +493,10 @@ to format the chunk as that.
 	    (cl-ppcre::register-groups-bind (name)
 		(":@\\+\\s*\\|([^|]+)\\|" first)
 	      name)))
-      (assert (if (and name-in-block (getf header-arguments :name))
-		  (equalp name-in-block (getf header-arguments :name))
+      (assert (if (and name-in-block (car (get-org-block-header-argument  header-arguments :name)))
+		  (equalp name-in-block (car (get-org-block-header-argument  header-arguments :name)))
 		  t) () "Conflicting names for this block, near position ~a" (file-position stream))
-      (let ((actual-name (string (or name-in-block (getf header-arguments :name))))
+      (let ((actual-name (string (or name-in-block (car (get-org-block-header-argument  header-arguments :name)))))
 	    (rest-lines (loop for line = (read-line stream nil :eof)
 			      until (ppcre:scan  "^#\\+end_verse" line)
 			      collect line)))
@@ -499,11 +515,11 @@ to format the chunk as that.
 
 #+begin_src lisp
 (:@+ |format the text according to :as header|
-  (cond ((eq (getf header-arguments :as :string) :string)
+  (cond ((equalp (get-org-block-header-argument  header-arguments :as '("STRING")) '("STRING"))
 	 (list (format  nil "\"~{~a~%~}\"" lines)))
-	((eq (getf header-arguments :as) :lines)
+	((equalp (get-org-block-header-argument  header-arguments :as) '("LINES"))
 	 (list (format nil "'(~{~s~})" lines)))
-	((eq (getf header-arguments :as) :stream)
+	((equalp (get-org-block-header-argument  header-arguments :as) '("STREAM"))
 	 (list (format nil "(make-string-input-stream \"~{~a~%~}\")" (mapcar (lambda(e)
 									       (replace-all
 										(replace-all e "\\" (lambda() "\\\\"))
@@ -1181,8 +1197,9 @@ With this one uses :org as the component type in your system defs.
 #+begin_src lisp
 (eval-when (:load-toplevel :execute)
   (defclass asdf::org (asdf:cl-source-file)
-  ((asdf::type :initform "org")))  
-  (export (list (intern "ORG" 'asdf)) :asdf)) ; was having package problems using asdf:org or asdf::org
+    ((asdf::type :initform "ORG")))  
+  (export (list (intern "ORG" 'asdf)) :asdf)
+) ; was having package problems using asdf:org or asdf::org
 #+end_src
 
 Here's an example of its use. Now when you load the system 
@@ -1239,8 +1256,8 @@ The [[https://common-lisp.net/project/fiveam/][FiveAM]] library is used to test.
 #+begin_src lisp :load test
 (5am:test read-org-block-header-arguments
   (5am:is (equal nil (read-org-block-header-arguments "" 0)))
-  (5am:is (equal '(:load :no) (read-org-block-header-arguments "lisp :load no  " 0)))
-  (5am:is (equal '(:load :no) (read-org-block-header-arguments "lisp :load no" 0))))
+  (5am:is (equal '(:load "no") (read-org-block-header-arguments "lisp :load no  " 0)))
+  (5am:is (equal '(:load "no") (read-org-block-header-arguments "lisp :load no" 0))))
 #+end_src
 
 *** tests for web syntax
@@ -1342,3 +1359,5 @@ The two methods of evaluating should work the same, at least.
 - [[https://orgmode.org/worg/org-contrib/babel/intro.html#literate-programming][literate programming in org babel]]
 - [[https://github.com/limist/literate-programming-examples][A collection of literate programming examples using Emacs Org mode]]
 - [[https://github.com/xtaniguchimasaya/papyrus][papyrus]] A Common Lisp Literate Programming Tool in markdown file
+
+
